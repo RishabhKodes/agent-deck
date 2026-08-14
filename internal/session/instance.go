@@ -1407,10 +1407,13 @@ func (i *Instance) buildBashExportPrefix(skipConfigDirForCustomCommand bool) str
 	if IsClaudeConfigDirExplicitForInstance(i) && !skipConfigDirForCustomCommand {
 		// Issue #922 (reporter @bautrey): see applyWorkerScratchOverride.
 		configDir := i.applyWorkerScratchOverride(GetClaudeConfigDirForInstance(i))
-		// shellescape: the resolved config_dir lands in the same `bash -c`
-		// payload as the quoted AGENTDECK_RESOLVED_* exports below; a config_dir
-		// containing ;/$() would otherwise inject. Audit F2.
-		prefix += fmt.Sprintf("export CLAUDE_CONFIG_DIR=%s; ", shellescape.Quote(configDir))
+		// configDirShellExpr quotes the resolved config_dir — it lands in the
+		// same `bash -c` payload as the quoted AGENTDECK_RESOLVED_* exports
+		// below, and a config_dir containing ;/$() would otherwise inject
+		// (audit F2) — and, for an --ssh session, expresses a local-home path
+		// relative to $HOME so it resolves against the REMOTE user's home
+		// instead of a local path that does not exist there (#1858).
+		prefix += fmt.Sprintf("export CLAUDE_CONFIG_DIR=%s; ", i.configDirShellExpr(configDir))
 	}
 	prefix += i.buildResolvedAccountHintExports()
 	return prefix
@@ -1426,11 +1429,19 @@ func (i *Instance) buildBashExportPrefix(skipConfigDirForCustomCommand bool) str
 // per-session scratch path. Always emitted for claude-compatible
 // instances (including when source resolves to "default") so consumers
 // can rely on the vars being present.
+//
+// AGENTDECK_RESOLVED_CONFIG_DIR goes through configDirShellExpr for the same
+// reason CLAUDE_CONFIG_DIR does (#1858, review finding F6): the consumers are
+// hooks and statusline scripts running on the host the session runs on, so for
+// an --ssh session a literal local-home path names a directory that does not
+// exist there — and shipping two config-dir vars that disagree, with the
+// readable one wrong, is worse than shipping one. The $HOME indirection is
+// resolved by the shell that reads it, so a local session is byte-identical.
 func (i *Instance) buildResolvedAccountHintExports() string {
 	resolved, source := GetClaudeConfigDirSourceForInstance(i)
 	return fmt.Sprintf(
 		"export AGENTDECK_RESOLVED_CONFIG_DIR=%s; export AGENTDECK_RESOLVED_GROUP=%s; export AGENTDECK_RESOLVED_SOURCE=%s; ",
-		shellescape.Quote(resolved),
+		i.configDirShellExpr(resolved),
 		shellescape.Quote(i.GroupPath),
 		shellescape.Quote(source),
 	)
@@ -4096,6 +4107,22 @@ func (i *Instance) ensureClaudeSessionIDFromDisk() {
 	// transcripts (e.g. a removed-then-recreated review session) cannot hijack
 	// a sibling's conversation. The Restart prelude already does this for
 	// #1147; this closes the same gap on the Start path.
+	// Issue #1851: the same bail-out the Restart variant needs, placed before
+	// every disk touch below. The #608 gate further down makes the Start path
+	// only ACCIDENTALLY safe for remote sessions — it is re-opened by
+	// `session set <id> claude-session-id X` (mutators.go), which stamps
+	// ClaudeDetectedAt, after which a later clear leaves a remote session
+	// eligible for the local mtime walk. The rule is unconditional: a local
+	// ~/.claude/projects lookup is never right for a conversation that lives on
+	// another host.
+	if !i.TranscriptIsResolvableLocally() {
+		sessionLog.Info("resume: skipped reason=remote_session",
+			slog.String("instance_id", i.ID),
+			slog.String("ssh_host", i.SSHHost),
+			slog.String("ssh_remote_path", i.SSHRemotePath),
+			slog.String("reason", "jsonl_discovery_remote_skip"))
+		return
+	}
 	explicitSessionID := i.adoptExplicitClaudeSessionID("session_id_flag_explicit")
 	if i.Tool == "claude" && i.ClaudeSessionID != "" {
 		if restored, err := RestoreOrphanedConversationBackup(i, GetClaudeConfigDirForInstance(i)); err == nil && restored != "" {
@@ -4170,6 +4197,25 @@ func (i *Instance) ensureClaudeSessionIDFromDiskForRestart() {
 	// sharing a CLAUDE_SESSION_ID. Adopting the explicit id BEFORE the
 	// non-empty short-circuit ensures it also corrects a previously-
 	// hijacked id from an earlier buggy run.
+	// Issue #1851: a remote session's conversation lives on the remote host, so
+	// a local ~/.claude/projects lookup can never be right for it. Without this
+	// bail-out the walk below scans the CONTROLLER's projects dir — keyed on
+	// ProjectPath, which for an --ssh session is only a local placeholder
+	// defaulting to the controller's cwd — and adopts whichever LOCAL session
+	// wrote last. restart() then calls sweepDuplicateToolSessions(), which kills
+	// the local tmux session that legitimately owns that conversation.
+	//
+	// A remote session's local ClaudeSessionID is essentially always empty
+	// (SyncSessionIDsToTmux only writes the tmux var when the id is already
+	// non-empty), so every remote restart reaches this point.
+	if !i.TranscriptIsResolvableLocally() {
+		sessionLog.Info("resume: skipped reason=remote_session",
+			slog.String("instance_id", i.ID),
+			slog.String("ssh_host", i.SSHHost),
+			slog.String("ssh_remote_path", i.SSHRemotePath),
+			slog.String("reason", "jsonl_discovery_restart_remote_skip"))
+		return
+	}
 	if i.adoptExplicitClaudeSessionID("session_id_flag_explicit_restart") {
 		return
 	}
@@ -6768,13 +6814,84 @@ func (i *Instance) ClaudeSessionIDCollidesWith(peers []*Instance) bool {
 	return false
 }
 
-// claudeTranscriptDir returns the directory that GetJSONLPath would place this
-// instance's transcript in (config dir + encoded project path), used to decide
-// whether two instances would collide on the same transcript file. It mirrors
-// GetJSONLPath's resolution (GetClaudeConfigDir + i.ProjectPath) exactly, so the
+// conversationIsResumable answers the question the spawn builders actually ask:
+// should this session be started with `--resume <id>` (continue the existing
+// conversation) or `--session-id <id>` (create a fresh one under that id)?
+//
+// For a LOCAL session that is the same question as "is there conversation data
+// on disk", so it delegates unchanged.
+//
+// For an --ssh session it is NOT. The transcript lives on the remote host, so
+// the controller cannot see it — and answering the local-disk question with a
+// hard false (which is the correct answer to *that* question, see
+// sessionHasConversationData) would make every remote restart emit
+// `--session-id <already-used-uuid>`, asking claude to CREATE a session that
+// already exists. That loses the conversation, or claude rejects the id
+// outright. Review round 1, finding F1.
+//
+// The controller's evidence for a remote session is the id it recorded when the
+// session last ran. A non-empty ClaudeSessionID means "this session previously
+// had this conversation", so `--resume` is the right instruction and the remote
+// claude resolves it against the remote disk — the only disk that can answer.
+// If the remote transcript is genuinely gone, claude reports that on the remote,
+// which is a far better failure than silently starting fresh over a live id.
+func conversationIsResumable(inst *Instance, sessionID string) bool {
+	if sessionID == "" {
+		return false
+	}
+	if inst != nil && !inst.TranscriptIsResolvableLocally() {
+		return true
+	}
+	return sessionHasConversationData(inst, sessionID)
+}
+
+// TranscriptIsResolvableLocally reports whether this instance's conversation
+// transcript can be looked up in the CONTROLLER's filesystem.
+//
+// It is false for an --ssh session, unconditionally (#1851). That session's
+// harness runs on another host and writes its transcript into THAT host's config
+// dir. All the controller holds is ProjectPath — a local placeholder defaulting
+// to the directory `add --ssh` was run from — so a lookup through it does not
+// merely miss: it HITS, on whatever local session happens to sit at that
+// directory. Every local-disk transcript lookup must ask this first; the harm is
+// symmetrical (a remote session reads a local conversation, and by adopting its
+// id sends the next restart's duplicate sweeper after the local session that
+// owns it).
+//
+// The complete list of entry points this gates is in the package doc for
+// remote_transcript_boundary.go.
+func (i *Instance) TranscriptIsResolvableLocally() bool {
+	return i != nil && !i.IsSSH()
+}
+
+// claudeTranscriptDir returns the key used to decide whether two instances would
+// collide on one transcript file (issue #1349 defense-in-depth #2, via
+// ClaudeSessionIDCollidesWith). For a local instance it mirrors GetJSONLPath's
+// resolution — GetClaudeConfigDir + encoded ProjectPath — exactly, so the
 // collision verdict matches the path the guard protects.
+//
+// Issue #1851: a remote session's transcript is not in this filesystem at all,
+// and its ProjectPath is only a local placeholder, so two remote sessions
+// sharing a placeholder were judged to share a transcript directory and
+// GetJSONLPathChecked refused reads that were never in conflict. Remote sessions
+// are therefore keyed on where they actually run (host + canonical remote path).
+//
+// Changing this key is only safe because it is changed together with every path
+// that derives a file location from it: TranscriptIsResolvableLocally gates
+// GetJSONLPath, getClaudeLastResponse and findLatestClaudeTranscriptOnDisk (see
+// remote_transcript_boundary.go), so no remote instance resolves a local
+// transcript path at all and a local/remote pair sharing one claude_session_id
+// can no longer land on one file for the guard to have to catch. Without those
+// gates this key would DISABLE the #1349/#1352 guard for exactly the pair this
+// epic exists to separate. The result is a collision KEY that is never opened as
+// a path, and the "remote-transcripts" segment keeps it from ever aliasing a
+// real local projects/ directory.
 func (i *Instance) claudeTranscriptDir() string {
 	configDir := GetClaudeConfigDir()
+	if i.IsSSH() {
+		loc := LocationOf(i)
+		return filepath.Join(configDir, "remote-transcripts", ConvertToClaudeDirName(loc.String()))
+	}
 	resolvedPath := i.ProjectPath
 	if resolved, err := filepath.EvalSymlinks(i.ProjectPath); err == nil {
 		resolvedPath = resolved
@@ -6863,8 +6980,17 @@ func resolveClaudeTranscriptPath(configDir, projectPath, sessionID string) strin
 
 // GetJSONLPath returns the path to the Claude session JSONL file for analytics.
 // Returns empty string if this is not a Claude session or the transcript is absent.
+//
+// A remote session's transcript is never absent-or-here: it is on the remote
+// host, so "" is the only truthful answer (see TranscriptIsResolvableLocally).
+// Resolving it through the local placeholder ProjectPath would hand a LOCAL
+// session's conversation to every caller of this function — analytics, the
+// transition notifier, the TUI, and GetJSONLPathChecked.
 func (i *Instance) GetJSONLPath() string {
 	if !IsClaudeCompatible(i.Tool) || i.ClaudeSessionID == "" {
+		return ""
+	}
+	if !i.TranscriptIsResolvableLocally() {
 		return ""
 	}
 	return resolveClaudeTranscriptPath(GetClaudeConfigDir(), i.ProjectPath, i.ClaudeSessionID)
@@ -6875,6 +7001,12 @@ func (i *Instance) getClaudeLastResponse() (*ResponseOutput, error) {
 	// Require stored session ID - no fallback to file scanning
 	if i.ClaudeSessionID == "" {
 		return nil, fmt.Errorf("no Claude session ID available for this instance")
+	}
+
+	// The conversation of an --ssh session is on the remote host; reading the
+	// controller's disk for it returns a LOCAL session's reply (#1851).
+	if !i.TranscriptIsResolvableLocally() {
+		return nil, fmt.Errorf("instance %s runs on %s; its Claude transcript is not on this machine", i.ID, i.SSHHost)
 	}
 
 	sessionFile := resolveClaudeTranscriptPath(GetClaudeConfigDir(), i.ProjectPath, i.ClaudeSessionID)
@@ -6903,7 +7035,20 @@ func (i *Instance) getClaudeLastResponse() (*ResponseOutput, error) {
 // syncGeminiSessionFromDisk fallback.
 //
 // Returns ("", nil) when no suitable transcript is found.
+//
+// It is the third door into "resolve a conversation against local disk", and the
+// most dangerous one: its caller WRITES the recovered id back onto the instance
+// and into the tmux pane's environment. For an --ssh session that would adopt a
+// LOCAL conversation durably, so the next restart reaches
+// sweepDuplicateToolSessions holding a local session's CLAUDE_SESSION_ID and
+// kills it — #1851's data loss, reached past the restart bail-out (which returns
+// early once ClaudeSessionID is non-empty). Hence the same unconditional gate the
+// other two doors have.
 func (i *Instance) findLatestClaudeTranscriptOnDisk() (string, *ResponseOutput) {
+	if !i.TranscriptIsResolvableLocally() {
+		return "", nil
+	}
+
 	configDir := GetClaudeConfigDir()
 
 	resolvedPath := i.ProjectPath
@@ -8368,7 +8513,7 @@ func (i *Instance) buildClaudeResumeCommand() string {
 	safePath := logging.SanitizeValue(i.ProjectPath)
 
 	useResume := canResumeClaudeSession(i, i.ClaudeSessionID)
-	if !useResume && i.ClaudeSessionID != "" {
+	if !useResume && i.ClaudeSessionID != "" && i.TranscriptIsResolvableLocally() {
 		time.Sleep(resumeCheckRetryDelay)
 		useResume = canResumeClaudeSession(i, i.ClaudeSessionID)
 		sessionLog.Debug(
@@ -9581,6 +9726,11 @@ func geminiSessionHasConversationData(sessionID, projectPath string) bool {
 // primary gate, so a missing file degrades gracefully to "candidate
 // doesn't appear larger, reject" rather than false-accepting.
 func sessionConversationByteSize(inst *Instance, sessionID string) int64 {
+	// #1851: see sessionHasConversationData — a remote session's transcript is
+	// not in this filesystem, so any size found here belongs to someone else.
+	if inst != nil && !inst.TranscriptIsResolvableLocally() {
+		return 0
+	}
 	var configDir string
 	if inst != nil {
 		configDir = GetClaudeConfigDirForInstance(inst)
@@ -9626,6 +9776,10 @@ func sessionConversationByteSize(inst *Instance, sessionID string) int64 {
 // like /clear (rich session is dormant, candidate is the new active jsonl).
 // Path resolution mirrors sessionConversationByteSize.
 func sessionConversationMtime(inst *Instance, sessionID string) time.Time {
+	// #1851: see sessionHasConversationData.
+	if inst != nil && !inst.TranscriptIsResolvableLocally() {
+		return time.Time{}
+	}
 	var configDir string
 	if inst != nil {
 		configDir = GetClaudeConfigDirForInstance(inst)
@@ -9738,7 +9892,18 @@ func (i *Instance) bindClaudeSessionFromHook(sessionID, hookSource, hookEvent, a
 // Returns false if:
 // - File doesn't exist (nothing to resume, use --session-id)
 // - File exists but has zero "sessionId" occurrences (never interacted)
+// It answers a LOCAL-DISK question. Callers deciding "start fresh or resume?"
+// must use conversationIsResumable instead — see its doc comment for why a hard
+// false is the wrong answer for a remote session.
 func sessionHasConversationData(inst *Instance, sessionID string) bool {
+	// #1851: for an --ssh session every path below is a directory on THIS
+	// machine, keyed on the local placeholder ProjectPath — so "yes, that id has
+	// conversation data" would be a statement about a LOCAL session's transcript.
+	// The honest answer for a conversation that lives on another host is "not
+	// here"; the remote harness makes its own resume decision on its own disk.
+	if inst != nil && !inst.TranscriptIsResolvableLocally() {
+		return false
+	}
 	// Build the session file path
 	// Format: {config_dir}/projects/{encoded_path}/{sessionID}.jsonl
 	var configDir string
@@ -9881,6 +10046,12 @@ func findSessionFileInAllProjects(inst *Instance, sessionID string) string {
 	if sessionID == "" {
 		return ""
 	}
+	// #1851: this scans EVERY local project dir for <sessionID>.jsonl, so for a
+	// remote session it is the widest door of all — it does not even need the
+	// placeholder path to collide.
+	if inst != nil && !inst.TranscriptIsResolvableLocally() {
+		return ""
+	}
 
 	var configDir string
 	if inst != nil {
@@ -9993,13 +10164,24 @@ func (i *Instance) wrapForSSH(command string) string {
 	sshDir := "/tmp/agent-deck-ssh"
 	_ = os.MkdirAll(sshDir, 0700)
 
-	remoteCmd := command
-	if i.SSHRemotePath != "" {
-		// Escape single quotes in the remote path and command
-		escapedPath := strings.ReplaceAll(i.SSHRemotePath, "'", "'\\''")
-		escapedCmd := strings.ReplaceAll(command, "'", "'\\''")
-		remoteCmd = fmt.Sprintf("cd '%s' && %s", escapedPath, escapedCmd)
-	}
+	// remoteCmd is the shell program the REMOTE shell will run. It is quoted
+	// exactly once, by shellQuote below, when it becomes ssh's final argument.
+	//
+	// The command is spliced in verbatim: it is already a shell program (the
+	// export prefix plus the harness invocation), not a literal to embed. It
+	// used to be escaped here as well and then again by shellQuote, so every
+	// single quote in the payload reached the remote shell malformed. That broke
+	// EVERY ungrouped --ssh claude session with a --remote-path, because the
+	// spawn prefix always emits `export AGENTDECK_RESOLVED_GROUP='';` — the
+	// remote shell answered `unexpected EOF while looking for matching '` and
+	// the session died in ~250ms, which is the symptom #1858 reports.
+	//
+	// RemoteCDPrefix (not a hand-rolled `cd '%s'`) is what makes the directory
+	// the session RUNS in the same directory its identity says it is in: it
+	// leaves a ~ prefix unquoted so the remote shell expands it against the
+	// REMOTE user's home, and emits nothing at all for the spellings that
+	// CanonicalRemotePath folds together ("", "~", "~/").
+	remoteCmd := RemoteCDPrefix(i.SSHRemotePath) + command
 
 	return fmt.Sprintf(
 		"ssh -t -o ControlMaster=auto -o ControlPath=/tmp/agent-deck-ssh/%%r@%%h:%%p -o ControlPersist=600 %s %s",
