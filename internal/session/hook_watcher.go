@@ -45,6 +45,8 @@ type HookStatus struct {
 	CodexCompletedGeneration string
 	CodexStartedSessionID    string
 	CodexCompletedSessionID  string
+	HookGeneration           string
+	Sequence                 uint64
 	// DoneStatus/DoneSummary carry a worker-printed completion sentinel
 	// detected on the Stop edge (issue #1186). Empty for ordinary turns.
 	DoneStatus  string // "ok" or "fail" when a completion sentinel was seen
@@ -58,6 +60,58 @@ type HookStatus struct {
 	// id may bind — empty (legacy files, agents that send no cwd) means "no
 	// evidence either way" and never blocks.
 	Cwd string
+}
+
+// hookGenerationForInstance resolves generation authority by instance, not by
+// whichever layout happened to contain a status file. A mode change leaves at
+// most one control (seed clears the opposite scope); conflicting controls fail
+// closed rather than selecting a stale layout.
+type hookGenerationAuthority uint8
+
+const (
+	hookGenerationAbsent hookGenerationAuthority = iota
+	hookGenerationValid
+	hookGenerationAmbiguous
+)
+
+func hookGenerationForInstance(instanceID string) (string, hookGenerationAuthority) {
+	root := GetHooksDir()
+	paths := []string{filepath.Join(root, "sandbox", instanceID, instanceID+".generation.json"), filepath.Join(root, instanceID+".generation.json")}
+	found := ""
+	for _, path := range paths {
+		data, err := readStatusFileNoFollow(path)
+		if err != nil {
+			if _, statErr := os.Lstat(path); statErr == nil {
+				return "", hookGenerationAmbiguous
+			}
+			continue
+		}
+		var control struct {
+			Generation string `json:"generation"`
+		}
+		if json.Unmarshal(data, &control) != nil || control.Generation == "" {
+			return "", hookGenerationAmbiguous
+		}
+		if found != "" && found != control.Generation {
+			return "", hookGenerationAmbiguous
+		}
+		found = control.Generation
+	}
+	if found == "" {
+		return "", hookGenerationAbsent
+	}
+	return found, hookGenerationValid
+}
+
+func hookGenerationRecordAccepted(recordGeneration string, generation string, authority hookGenerationAuthority) bool {
+	switch authority {
+	case hookGenerationAbsent:
+		return recordGeneration == ""
+	case hookGenerationValid:
+		return recordGeneration == generation
+	default:
+		return false
+	}
 }
 
 // StatusFileWatcher watches ~/.agent-deck/hooks/ for status file changes
@@ -287,6 +341,9 @@ func (w *StatusFileWatcher) instanceIDForStatusFile(filePath string) (string, bo
 	}
 	dir := filepath.Dir(filePath)
 	base := filepath.Base(filePath)
+	if strings.HasSuffix(base, ".generation.json") {
+		return "", false
+	}
 	// Per-instance scoped subdir: …/hooks/sandbox/<id>/…  (parent-of-dir is the
 	// sandbox root, so dir itself is the per-instance subdir named <id>).
 	if w.sandboxDir != "" && filepath.Dir(dir) == w.sandboxDir {
@@ -311,6 +368,9 @@ func (w *StatusFileWatcher) instanceIDForStatusFile(filePath string) (string, bo
 func (w *StatusFileWatcher) scanDirEntriesInto(out map[string]*HookStatus, dir string, entries []os.DirEntry) {
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		if strings.HasSuffix(entry.Name(), ".generation.json") {
 			continue
 		}
 		path := filepath.Join(dir, entry.Name())
@@ -339,8 +399,13 @@ func (w *StatusFileWatcher) scanDirEntriesInto(out map[string]*HookStatus, dir s
 			CodexCompletedGeneration string `json:"codex_completed_generation"`
 			CodexStartedSessionID    string `json:"codex_started_session_id"`
 			CodexCompletedSessionID  string `json:"codex_completed_session_id"`
+			HookGeneration           string `json:"hook_generation"`
+			Sequence                 uint64 `json:"sequence"`
 		}
 		if uerr := json.Unmarshal(data, &raw); uerr != nil {
+			continue
+		}
+		if generation, authority := hookGenerationForInstance(instanceID); !hookGenerationRecordAccepted(raw.HookGeneration, generation, authority) {
 			continue
 		}
 		out[instanceID] = &HookStatus{
@@ -356,6 +421,8 @@ func (w *StatusFileWatcher) scanDirEntriesInto(out map[string]*HookStatus, dir s
 			CodexCompletedGeneration: raw.CodexCompletedGeneration,
 			CodexStartedSessionID:    raw.CodexStartedSessionID,
 			CodexCompletedSessionID:  raw.CodexCompletedSessionID,
+			HookGeneration:           raw.HookGeneration,
+			Sequence:                 raw.Sequence,
 		}
 	}
 }
@@ -489,6 +556,8 @@ func (w *StatusFileWatcher) processFile(filePath string) {
 		CodexCompletedGeneration string `json:"codex_completed_generation"`
 		CodexStartedSessionID    string `json:"codex_started_session_id"`
 		CodexCompletedSessionID  string `json:"codex_completed_session_id"`
+		HookGeneration           string `json:"hook_generation"`
+		Sequence                 uint64 `json:"sequence"`
 	}
 	if err := json.Unmarshal(data, &status); err != nil {
 		hookLog.Warn("hook_file_corrupt",
@@ -497,6 +566,9 @@ func (w *StatusFileWatcher) processFile(filePath string) {
 			slog.String("error", err.Error()),
 			slog.Int("bytes_read", len(data)),
 		)
+		return
+	}
+	if generation, authority := hookGenerationForInstance(instanceID); !hookGenerationRecordAccepted(status.HookGeneration, generation, authority) {
 		return
 	}
 
@@ -513,9 +585,15 @@ func (w *StatusFileWatcher) processFile(filePath string) {
 		CodexCompletedGeneration: status.CodexCompletedGeneration,
 		CodexStartedSessionID:    status.CodexStartedSessionID,
 		CodexCompletedSessionID:  status.CodexCompletedSessionID,
+		HookGeneration:           status.HookGeneration,
+		Sequence:                 status.Sequence,
 	}
 
 	w.mu.Lock()
+	if prior := w.statuses[instanceID]; prior != nil && status.HookGeneration != "" && prior.HookGeneration == status.HookGeneration && status.Sequence <= prior.Sequence {
+		w.mu.Unlock()
+		return
+	}
 	w.statuses[instanceID] = hookStatus
 	w.mu.Unlock()
 
