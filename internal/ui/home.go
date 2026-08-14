@@ -377,6 +377,13 @@ type Home struct {
 	// store rather than groupTree's expanded flags.
 	remoteGroupsCollapsed map[string]bool
 
+	// Manual order of remote session rows (#1875): remote -> group path ->
+	// session IDs. Remote rows are not Instances in groupTree, so shift+up/down
+	// cannot move them there; this local overlay carries the order instead and
+	// is persisted in ui_state (see applyRemoteSessionOrder for the drift
+	// rules and remoteOrder for why the scoping is nested).
+	remoteSessionOrder remoteOrder
+
 	// Worktree dirty status cache (lazy, 10s TTL)
 	worktreeDirtyCache   map[string]bool      // sessionID -> isDirty
 	worktreeDirtyCacheTs map[string]time.Time // sessionID -> cache timestamp
@@ -732,6 +739,13 @@ type uiState struct {
 	// groupTree, which is persisted separately by saveGroupState; remote groups
 	// are synthetic UI rows and have no home there.
 	RemoteGroupsCollapsed []string `json:"remote_groups_collapsed,omitempty"`
+
+	// RemoteSessionOrder is the manual order of remote session rows (#1875):
+	// remote -> group path -> session IDs. It rides in ui_state because it is
+	// a view preference of this machine, exactly like the preview mode and
+	// status filter above. Nested rather than flat-keyed so a remote name or
+	// group path containing "/" cannot alias another bucket (see remoteOrder).
+	RemoteSessionOrder map[string]map[string][]string `json:"remote_session_order,omitempty"`
 }
 
 type selectedItemIdentity struct {
@@ -1441,6 +1455,7 @@ func NewHomeWithProfileAndMode(profile string) *Home {
 		lastLogActivity:           make(map[string]time.Time),
 		windowsCollapsed:          make(map[string]bool),
 		remoteGroupsCollapsed:     make(map[string]bool),
+		remoteSessionOrder:        make(remoteOrder),
 		worktreeDirtyCache:        make(map[string]bool),
 		worktreeDirtyCacheTs:      make(map[string]time.Time),
 		statusTrigger:             make(chan statusUpdateRequest, 1), // Buffered to avoid blocking
@@ -2570,7 +2585,8 @@ func (h *Home) rebuildFlatItems() {
 		for _, remoteName := range remoteNames {
 			// #1553: nest each remote's sessions under their Group paths
 			// instead of dumping them flat at Level 1.
-			h.flatItems = append(h.flatItems, buildRemoteFlatItems(remoteName, remotes[remoteName], h.remoteGroupsCollapsed)...)
+			// #1875: apply the user's manual row order for this remote.
+			h.flatItems = append(h.flatItems, buildRemoteFlatItemsOrdered(remoteName, remotes[remoteName], h.remoteGroupsCollapsed, h.remoteSessionOrder.forRemote(remoteName))...)
 		}
 	}
 
@@ -8695,6 +8711,13 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if h.cursor < len(h.flatItems) {
 			item := h.flatItems[h.cursor]
 			switch item.Type {
+			case session.ItemTypeRemoteSession, session.ItemTypeRemoteGroup:
+				// #1875: remote rows are not Instances in groupTree, so they
+				// carry a local order overlay instead. Returning here also
+				// skips the forceSaveInstances below, which has nothing to do
+				// with a remote reorder.
+				h.moveRemoteItem(item, -1)
+				return h, nil
 			case session.ItemTypeGroup:
 				h.groupTree.MoveGroupUp(item.Path)
 				h.rebuildFlatItems()
@@ -8728,6 +8751,10 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if h.cursor < len(h.flatItems) {
 			item := h.flatItems[h.cursor]
 			switch item.Type {
+			case session.ItemTypeRemoteSession, session.ItemTypeRemoteGroup:
+				// #1875 — see the shift+up twin above.
+				h.moveRemoteItem(item, 1)
+				return h, nil
 			case session.ItemTypeGroup:
 				h.groupTree.MoveGroupDown(item.Path)
 				h.rebuildFlatItems()
@@ -11417,19 +11444,34 @@ func (h *Home) saveGroupState() {
 }
 
 // saveUIState persists cursor position, preview mode, and status filter to SQLite metadata.
+// Failures are logged only; use saveUIStateErr when the caller has to tell the
+// user that their action did not stick.
 func (h *Home) saveUIState() {
+	_ = h.saveUIStateErr()
+}
+
+// saveUIStateErr is saveUIState with the write outcome returned.
+//
+// The periodic and incidental callers do not care — a dropped autosave is
+// recoverable on the next tick. An explicit user action does care: #1875 exists
+// because a remote row silently swallowed a keystroke, and "the rows moved but
+// the order was never written" is the same lie one layer down. A nil storage or
+// DB is not a failure: that is the headless/no-persistence configuration, not a
+// write that went wrong.
+func (h *Home) saveUIStateErr() error {
 	if h.storage == nil {
-		return
+		return nil
 	}
 	db := h.storage.GetDB()
 	if db == nil {
-		return
+		return nil
 	}
 
 	state := uiState{
-		PreviewMode:   int(h.previewMode),
-		StatusFilter:  string(h.statusFilter),
-		GroupViewMode: int(h.groupViewMode),
+		PreviewMode:        int(h.previewMode),
+		StatusFilter:       string(h.statusFilter),
+		GroupViewMode:      int(h.groupViewMode),
+		RemoteSessionOrder: h.remoteSessionOrder,
 	}
 
 	// Sorted so an unchanged fold state marshals byte-identically and doesn't
@@ -11463,11 +11505,13 @@ func (h *Home) saveUIState() {
 	data, err := json.Marshal(state)
 	if err != nil {
 		uiLog.Warn("save_ui_state_marshal_failed", slog.String("error", err.Error()))
-		return
+		return err
 	}
 	if err := db.SetMeta("ui_state", string(data)); err != nil {
 		uiLog.Warn("save_ui_state_failed", slog.String("error", err.Error()))
+		return err
 	}
+	return nil
 }
 
 // loadUIState reads persisted UI state from SQLite metadata.
@@ -11508,6 +11552,18 @@ func (h *Home) loadUIState() {
 	h.groupViewMode = session.GroupViewMode(state.GroupViewMode)
 	if h.groupViewMode < session.GroupViewNormal || h.groupViewMode >= session.GroupViewModeCount {
 		h.groupViewMode = session.GroupViewNormal
+	}
+
+	// #1875: restore the manual remote row order. Entries for remotes that no
+	// longer exist are harmless — a bucket key nobody builds is never read —
+	// and stale session IDs inside a live bucket are skipped when applied.
+	h.remoteSessionOrder = make(remoteOrder, len(state.RemoteSessionOrder))
+	for remoteName, groups := range state.RemoteSessionOrder {
+		for groupPath, ids := range groups {
+			if len(ids) > 0 {
+				h.remoteSessionOrder.set(remoteName, groupPath, ids)
+			}
+		}
 	}
 
 	// Defer cursor restoration until flatItems are populated
@@ -13708,6 +13764,111 @@ func (a attachWindowCmd) Run() error {
 func (a attachWindowCmd) SetStdin(r io.Reader)  {}
 func (a attachWindowCmd) SetStdout(w io.Writer) {}
 func (a attachWindowCmd) SetStderr(w io.Writer) {}
+
+// moveRemoteItem handles shift+up/down (and the +/-/K/J aliases) on a remote
+// row (#1875). delta is -1 for up and +1 for down.
+//
+// The move rewrites this bucket's entry in the local order overlay and saves
+// it; nothing is sent to the remote. Every path through here either changes
+// the order or reports why it could not, because a silent no-op is the bug
+// being fixed — a remote row that swallows the keystroke is indistinguishable
+// from a stuck key.
+//
+// Remote GROUP headers deliberately do not reorder. buildRemoteFlatItems emits
+// them by walking the bucket paths in lexicographic order, which is what makes
+// a parent header land immediately before its descendants and lets the
+// intermediate headers of "a/b/c" be synthesized on the fly; a manual group
+// order would have to replace that walk with a real tree. Remote groups also
+// have no identity of their own — they exist only as the Group strings of the
+// sessions inside them, so a group with no sessions cannot even be addressed.
+// The header therefore says so instead of going quiet.
+func (h *Home) moveRemoteItem(item session.Item, delta int) {
+	direction := "up"
+	edge := "first"
+	if delta > 0 {
+		direction = "down"
+		edge = "last"
+	}
+
+	if item.Type == session.ItemTypeRemoteGroup {
+		h.setError(fmt.Errorf("cannot move %s: remote group rows are ordered by name — reorder the sessions inside instead", direction))
+		return
+	}
+	if item.RemoteSession == nil || item.RemoteName == "" {
+		h.setError(fmt.Errorf("cannot move %s: this remote session row is malformed", direction))
+		return
+	}
+	moved := item.RemoteSession
+	if moved.ID == "" {
+		h.setError(fmt.Errorf("cannot move '%s' %s: %s did not report an id for it", moved.Title, direction, item.RemoteName))
+		return
+	}
+
+	// The bucket is the one buildRemoteFlatItems put this row in: same remote,
+	// same normalized group path.
+	groupPath := normalizeRemoteGroupPath(moved.Group)
+
+	h.remoteSessionsMu.RLock()
+	fetched := h.remoteSessions[item.RemoteName]
+	natural := make([]string, 0, len(fetched))
+	for i := range fetched {
+		if normalizeRemoteGroupPath(fetched[i].Group) == groupPath {
+			natural = append(natural, fetched[i].ID)
+		}
+	}
+	h.remoteSessionsMu.RUnlock()
+
+	// A bucket whose IDs are not unique cannot be reordered at all:
+	// orderRemoteBucket refuses to permute it, because the slot mapping is no
+	// longer 1:1 and a row could be dropped or doubled. Storing an order for it
+	// would change nothing on screen — a no-op dressed as success, which is the
+	// bug this issue is about. It also makes the row itself ambiguous: two rows
+	// answering to the same ID cannot be told apart. Report it instead.
+	if dup, ok := firstDuplicateID(natural); ok {
+		h.setError(fmt.Errorf("cannot move '%s' %s: %s lists more than one session with id %q in this group, so their order cannot be tracked", moved.Title, direction, item.RemoteName, dup))
+		return
+	}
+
+	// Start from what is actually on screen — the fetched list with the
+	// current overlay already applied — so a move is always relative to what
+	// the user sees, whatever has drifted since the overlay was written.
+	current := applyRemoteSessionOrder(natural, h.remoteSessionOrder.forRemote(item.RemoteName)[groupPath])
+	pos := -1
+	for i, id := range current {
+		if id == moved.ID {
+			pos = i
+			break
+		}
+	}
+	if pos < 0 {
+		h.setError(fmt.Errorf("cannot move '%s' %s: it is no longer listed on %s", moved.Title, direction, item.RemoteName))
+		return
+	}
+
+	target := pos + delta
+	if target < 0 || target >= len(current) {
+		h.setError(fmt.Errorf("'%s' is already %s in its group on %s", moved.Title, edge, item.RemoteName))
+		return
+	}
+	current[pos], current[target] = current[target], current[pos]
+
+	// current lists exactly the sessions present in this bucket right now, so
+	// storing it whole keeps the overlay complete and the next move stable.
+	if h.remoteSessionOrder == nil {
+		h.remoteSessionOrder = make(remoteOrder)
+	}
+	h.remoteSessionOrder.set(item.RemoteName, groupPath, current)
+
+	h.clearError()
+	h.rebuildFlatItemsPreservingSelection(h.captureSelectedItemIdentity())
+
+	// A move that cannot be written is a move that will be gone at the next
+	// launch. Say so: the rows visibly moved, so staying quiet here would be
+	// the same silent lie this issue is about, one layer down.
+	if err := h.saveUIStateErr(); err != nil {
+		h.setError(fmt.Errorf("moved '%s' %s, but the order could not be saved and will not survive a restart: %w", moved.Title, direction, err))
+	}
+}
 
 // attachRemoteSession attaches to a remote session via SSH, suspending the TUI.
 func (h *Home) attachRemoteSession(remoteName, sessionID string) tea.Cmd {
