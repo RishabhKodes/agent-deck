@@ -230,11 +230,7 @@ func writeCodexHookStatus(instanceID, status, sessionID, event string, turnIDs .
 	if err != nil {
 		return
 	}
-	defer func() {
-		if err := lock.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "agent-deck: close Codex hook lock: %v\n", err)
-		}
-	}()
+	defer closeChecked(lock)
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
 		return
 	}
