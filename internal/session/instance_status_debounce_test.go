@@ -184,10 +184,14 @@ func TestCodexCompletionEvidenceInvalidatedBySubsequentRunningTurn(t *testing.T)
 	}
 
 	// Turn B has no start hook; tmux is the authoritative newer-running edge.
-	// If the notify writer currently owns the lock, invalidation must return
-	// without blocking and retain the generation so the next running sample can
-	// retry the durable consume.
-	lockPath := filepath.Join(GetHooksDir(), instanceID+".codex.lock")
+	// Hold the host-only consumption lock and prove invalidation releases i.mu
+	// while its bounded retry runs. Contention suppresses convergence but keeps
+	// the generation in memory for the next running sample to retry.
+	consumedDir := filepath.Join(GetHooksDir(), ".codex-consumed")
+	if err := os.MkdirAll(consumedDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(consumedDir, instanceID+".lock")
 	lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		t.Fatal(err)
@@ -195,9 +199,35 @@ func TestCodexCompletionEvidenceInvalidatedBySubsequentRunningTurn(t *testing.T)
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
 		t.Fatal(err)
 	}
-	i.invalidateCodexCompletionOnRunning()
-	if !i.codexCompletionConverged() {
-		t.Fatal("contended durable consume discarded the in-memory retry generation")
+	i.mu.Lock()
+	done := make(chan struct{})
+	go func() {
+		i.invalidateCodexCompletionOnRunning()
+		i.mu.Unlock()
+		close(done)
+	}()
+	muLive := make(chan Status)
+	go func() {
+		i.mu.Lock()
+		status := i.Status
+		i.mu.Unlock()
+		muLive <- status
+	}()
+	select {
+	case <-muLive:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("Instance.mu stayed blocked behind the held file lock")
+	}
+	select {
+	case <-done:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("bounded file-lock acquisition did not return")
+	}
+	if i.codexCompletionConverged() {
+		t.Fatal("contended consume must suppress stale completion convergence")
+	}
+	if i.codexStartedGeneration != generation || i.codexCompletedGeneration != generation {
+		t.Fatal("contended durable consume discarded the retry generation")
 	}
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_UN); err != nil {
 		t.Fatal(err)
@@ -206,7 +236,9 @@ func TestCodexCompletionEvidenceInvalidatedBySubsequentRunningTurn(t *testing.T)
 		t.Fatal(err)
 	}
 
+	i.mu.Lock()
 	i.invalidateCodexCompletionOnRunning()
+	i.mu.Unlock()
 	if i.codexCompletionConverged() {
 		t.Fatal("stale turn A evidence converged after turn B started")
 	}
@@ -217,6 +249,67 @@ func TestCodexCompletionEvidenceInvalidatedBySubsequentRunningTurn(t *testing.T)
 	if got.CodexStartedGeneration != "" || got.CodexCompletedGeneration != "" ||
 		got.CodexStartedSessionID != "" || got.CodexCompletedSessionID != "" {
 		t.Fatalf("durable stale completion evidence was not consumed: %#v", got)
+	}
+
+	// The watcher cached the unmasked hook record before consumption and sees
+	// no event when the host-only marker lands. Polling must re-mask that cached
+	// copy instead of rehydrating turn A into the warm Instance.
+	watcher := &StatusFileWatcher{statuses: map[string]*HookStatus{instanceID: {
+		Status: "waiting", SessionID: sessionID,
+		CodexStartedGeneration: generation, CodexCompletedGeneration: generation,
+		CodexStartedSessionID: sessionID, CodexCompletedSessionID: sessionID,
+	}}}
+	i.UpdateHookStatus(watcher.GetHookStatus(instanceID))
+	if i.codexCompletionConverged() {
+		t.Fatal("polling loop rehydrated consumed completion from watcher cache")
+	}
+}
+
+func TestCodexCompletionInvalidationRetriesAfterDurableWriteFailure(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	instanceID, generation := "codex-retry", "thread-1:turn-a"
+	consumedPath := codexConsumedGenerationPath(instanceID, generation)
+	if err := os.MkdirAll(consumedPath, 0o700); err != nil { // force atomic rename failure
+		t.Fatal(err)
+	}
+	i := &Instance{ID: instanceID, Tool: "codex", CodexSessionID: "thread-1",
+		codexStartedGeneration: generation, codexCompletedGeneration: generation,
+		codexStartedSessionID: "thread-1", codexCompletedSessionID: "thread-1"}
+
+	i.mu.Lock()
+	i.invalidateCodexCompletionOnRunning()
+	i.mu.Unlock()
+	if i.codexStartedGeneration != generation || i.codexCompletedGeneration != generation {
+		t.Fatal("memory cleared before durable consume succeeded")
+	}
+	if i.codexCompletionConverged() {
+		t.Fatal("failed durable consume must remain in the safe, non-converged state")
+	}
+	if err := os.Remove(consumedPath); err != nil {
+		t.Fatal(err)
+	}
+	i.mu.Lock()
+	i.invalidateCodexCompletionOnRunning()
+	i.mu.Unlock()
+	if i.codexStartedGeneration != "" || i.codexCompletedGeneration != "" {
+		t.Fatal("retry did not clear memory after durable consume succeeded")
+	}
+}
+
+func TestCodexConsumedGenerationsCannotOverwriteEachOther(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	instanceID := "codex-ordered-consume"
+	newer := "thread-1:turn-b"
+	older := "thread-1:turn-a"
+	if consumed, err := consumeCodexCompletionEvidence(instanceID, newer); err != nil || !consumed {
+		t.Fatalf("consume newer generation: consumed=%v err=%v", consumed, err)
+	}
+	// Simulate a delayed process persisting stale A after B already landed.
+	if consumed, err := consumeCodexCompletionEvidence(instanceID, older); err != nil || !consumed {
+		t.Fatalf("consume older generation: consumed=%v err=%v", consumed, err)
+	}
+	if !codexCompletionEvidenceConsumed(instanceID, newer) || !codexCompletionEvidenceConsumed(instanceID, older) {
+		t.Fatal("delayed stale consume replaced another consumed generation")
 	}
 }
 
