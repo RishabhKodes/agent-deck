@@ -6122,7 +6122,23 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				h.cachedStatusCounts.valid.Store(false)
 				h.rebuildFlatItems()
 			}
-			// Save the updated session state (new tmux session name)
+			// The name and status this restart produced are already durable:
+			// Instance.restart records them with a targeted two-column write at
+			// the moment it mints them (#1870). This save is for the rest of the
+			// restart's in-memory state, and it stays a ROUTINE save on purpose.
+			//
+			// The first shape of this fix force-saved here, to stop the
+			// external-change abort from discarding the new tmux name. That cured
+			// a lost restart mutation with a much worse failure: a force save
+			// pushes this TUI's whole in-memory snapshot, so an archive, rename or
+			// group move another process made while this TUI was stale is silently
+			// reverted -- the lost-update shape behind this repository's data-loss
+			// incidents. A single wrong field is never worth a whole-snapshot write.
+			//
+			// adoptRestartRecord below keeps the abort from firing on this TUI's
+			// OWN restart write, which is what made the abort look like the
+			// problem in the first place.
+			h.adoptRestartRecord(msg.sessionID)
 			h.saveInstances()
 			if msg.warning != "" {
 				h.setError(fmt.Errorf("%s", msg.warning))
@@ -11434,6 +11450,58 @@ func (h *Home) saveInstancesWithForce(force bool) {
 				h.storageWatcher.TriggerReload()
 			}
 		}
+	}
+}
+
+// adoptRestartRecord accounts for the targeted write Instance.restart makes when
+// it records what a restart produced.
+//
+// That write moves the state DB's last_modified. This TUI's freshness marker
+// does not move with it, so the save that follows a restart would read the
+// TUI's OWN write as an external change, abort, and reload -- discarding the
+// rest of the restart's in-memory state (sandbox container, tool session ids,
+// the dedup pass) for no reason. That self-inflicted false positive is what
+// #1868 was really hitting.
+//
+// The marker is advanced only when the restart's write was the sole change
+// since this TUI loaded: nothing landed between the load and the write, and
+// nothing has landed since. Anything else means the database really has moved
+// on, the abort is correct, and it stays -- the reload picks up what the other
+// process wrote, and the restart's own outcome is durable either way because
+// the targeted write already landed.
+//
+// last_modified is a UnixNano stamp, so this is an exact identity test on our
+// own write rather than a time window that could swallow somebody else's.
+func (h *Home) adoptRestartRecord(sessionID string) {
+	if h.storage == nil {
+		return
+	}
+	inst := h.getInstanceByID(sessionID)
+	if inst == nil {
+		return
+	}
+	stamps := inst.RestartRecordStamps()
+	if stamps.After == 0 {
+		return
+	}
+	current, err := h.storage.GetFileMtime()
+	if err != nil || current.IsZero() {
+		return
+	}
+
+	h.reloadMu.Lock()
+	defer h.reloadMu.Unlock()
+	if !stamps.SoleWriterSince(h.lastLoadMtime.UnixNano(), current.UnixNano()) {
+		uiLog.Debug("restart_record_not_sole_writer",
+			slog.Int64("before", stamps.Before),
+			slog.Int64("after", stamps.After),
+			slog.Int64("current", current.UnixNano()))
+		return
+	}
+	h.lastLoadMtime = current
+	if h.storageWatcher != nil {
+		// Our own bump should not make the watcher schedule a reload either.
+		h.storageWatcher.NotifySave()
 	}
 }
 
