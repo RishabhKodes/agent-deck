@@ -130,19 +130,35 @@ func tryPoolSocket(pool *mcppool.Pool, name, scope string) (MCPServerConfig, boo
 }
 
 // readExistingLocalMCPServers reads mcpServers from an existing .mcp.json file.
-// Returns nil if the file doesn't exist or can't be parsed.
-func readExistingLocalMCPServers(mcpFile string) map[string]json.RawMessage {
+//
+// Returns (nil, nil) ONLY when the file genuinely does not exist. A file that
+// exists but cannot be read or parsed returns an error.
+//
+// This is the same defect readJSONObjectConfig fixed for .claude.json, in the
+// fifth writer path (#1956). It returned nil for a read error and for a parse
+// error alike; the caller merges that nil into a fresh map and writes the whole
+// file back, so a transient I/O failure or a half-written .mcp.json silently
+// deleted every server the user had declared there. .mcp.json is a file the
+// user owns and commits, so the loss lands in their repository.
+//
+// "I could not read it" is never "there is nothing there".
+func readExistingLocalMCPServers(mcpFile string) (map[string]json.RawMessage, error) {
 	data, err := os.ReadFile(mcpFile)
 	if err != nil {
-		return nil
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("refusing to modify %s: it could not be read (%w). "+
+			"Writing would replace its current contents — fix or restore the file first", mcpFile, err)
 	}
 	var config struct {
 		MCPServers map[string]json.RawMessage `json:"mcpServers"`
 	}
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil
+		return nil, fmt.Errorf("refusing to modify %s: it is not valid JSON (%w). "+
+			"Writing would replace its current contents — fix or restore the file first", mcpFile, err)
 	}
-	return config.MCPServers
+	return config.MCPServers, nil
 }
 
 // writeJSONFileAtomic writes JSON data to path atomically (symlink-preserving,
@@ -185,7 +201,10 @@ func WriteMergedMcpJSONFile(mcpFile string, enabledNames []string, pluginPinClau
 		}
 	}
 
-	existingServers := readExistingLocalMCPServers(mcpFile)
+	existingServers, err := readExistingLocalMCPServers(mcpFile)
+	if err != nil {
+		return err
+	}
 	agentDeckServers := make(map[string]MCPServerConfig)
 
 	for _, name := range enabledNames {
@@ -313,9 +332,39 @@ func readJSONObjectConfig(path string) (map[string]interface{}, error) {
 			"Writing would replace its current contents — fix or restore the file first", path, err)
 	}
 	if cfg == nil {
-		cfg = map[string]interface{}{}
+		// json.Unmarshal("null", &map) SUCCEEDS and yields a nil map, so the
+		// parse check above never fires for a `null` root. Starting fresh here
+		// would replace the file — the same substitution this function exists to
+		// prevent, reached by the one input that walks past the guard. A `null`
+		// document holds no user data, so nothing is lost by refusing either.
+		return nil, fmt.Errorf("refusing to modify %s: its JSON root is null, not an object. "+
+			"Writing would replace its current contents — fix or restore the file first", path)
 	}
 	return cfg, nil
+}
+
+// objectFieldForUpdate returns obj[key] as a JSON object for merging.
+//
+// Absent and explicit-null both mean "nothing to preserve" and yield a fresh
+// empty map. A value of any other type means the document is not shaped the way
+// this writer assumes, and replacing it would discard whatever it holds.
+//
+// This is the case refuseDroppingTopLevelKeys cannot see. That guard compares
+// top-level KEY SETS, so rewriting the VALUE of a key present in both documents
+// reads as nothing dropped — while every entry underneath it is gone. A
+// `.claude.json` whose "projects" value is corrupt kept "projects" as a key and
+// lost all three project entries, reported as success (#1956).
+func objectFieldForUpdate(obj map[string]interface{}, key, describe string) (map[string]interface{}, error) {
+	v, present := obj[key]
+	if !present || v == nil {
+		return make(map[string]interface{}), nil
+	}
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("refusing to modify %s: it is %T, not a JSON object. "+
+			"Writing would discard its current contents — fix or restore the file first", describe, v)
+	}
+	return m, nil
 }
 
 // refuseDroppingTopLevelKeys is the second net under readJSONObjectConfig: even
@@ -607,24 +656,26 @@ func writeProjectMCPLocked(projectPath string, enabledNames []string) error {
 		return err
 	}
 
-	projects, _ := rawConfig["projects"].(map[string]interface{})
-	if projects == nil {
-		projects = make(map[string]interface{})
+	projects, err := objectFieldForUpdate(rawConfig, "projects", fmt.Sprintf("%s: projects", configFile))
+	if err != nil {
+		return err
 	}
-	proj, _ := projects[projectPath].(map[string]interface{})
-	if proj == nil {
-		proj = make(map[string]interface{})
+	proj, err := objectFieldForUpdate(projects, projectPath, fmt.Sprintf("%s: projects[%q]", configFile, projectPath))
+	if err != nil {
+		return err
+	}
+	existing, err := objectFieldForUpdate(proj, "mcpServers", fmt.Sprintf("%s: projects[%q].mcpServers", configFile, projectPath))
+	if err != nil {
+		return err
 	}
 
 	availableMCPs := GetAvailableMCPs()
 	managed := buildManagedMCPServers(enabledNames, "project")
 
 	merged := make(map[string]interface{})
-	if existing, ok := proj["mcpServers"].(map[string]interface{}); ok {
-		for name, cfg := range existing {
-			if _, isManaged := availableMCPs[name]; !isManaged {
-				merged[name] = cfg
-			}
+	for name, cfg := range existing {
+		if _, isManaged := availableMCPs[name]; !isManaged {
+			merged[name] = cfg
 		}
 	}
 	for name, cfg := range managed {

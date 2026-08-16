@@ -67,6 +67,53 @@ export function mcpStateForResponse({ forSessionId, activeSessionId, catalogResp
   }
 }
 
+// createRefreshGate decides, for every async refresh, two things: may this
+// refresh start, and may its result still be applied?
+//
+// mcpStateForResponse above rejects a response belonging to a session the user
+// has left. It cannot reject a STALE response for the session the user is still
+// on: two refreshes for the same session (a switch and an attach, say) both pass
+// the session-id check, so whichever resolves last wins even when it is the
+// older request, reinstating a pre-mutation scope list.
+//
+// Tokens are keyed BY SESSION, and begin() refuses — without touching any token
+// — when the refresh belongs to a session that is no longer active. A single
+// shared counter would be worse than none: an attach on session A that resolves
+// after the user switches to B calls refresh() for A, and a shared counter would
+// advance past B's in-flight token, discarding B's legitimate response and
+// leaving B with empty scopes and the spinner stuck on. That is a stale refresh
+// POISONING a newer session's, a different failure from a stale response merely
+// winning, and not fixed by the same check. Checking before advancing, and
+// keying per session, prevents both.
+//
+// Exported for tests, like mcpStateForResponse: rendering preact components
+// under vitest is broken here (see unit/archivedPane.test.js).
+export function createRefreshGate() {
+  const tokens = new Map()
+  return {
+    // begin returns a token, or null when this refresh must not run at all.
+    // Callers that get null must return immediately: no fetch, no loading
+    // state, no token consumed.
+    begin(forSessionId, activeSessionId) {
+      if (!forSessionId || forSessionId !== activeSessionId) return null
+      const token = (tokens.get(forSessionId) || 0) + 1
+      tokens.set(forSessionId, token)
+      return token
+    },
+    // mayApply is true only for the newest refresh of the still-active session.
+    mayApply(forSessionId, activeSessionId, token) {
+      if (token == null || forSessionId !== activeSessionId) return false
+      return tokens.get(forSessionId) === token
+    },
+    // forget drops a session's token so the map cannot grow for the lifetime of
+    // the tab. A refresh still in flight for that session then fails mayApply,
+    // which is correct: the user is no longer looking at it.
+    forget(sessionId) {
+      tokens.delete(sessionId)
+    },
+  }
+}
+
 // jsonFetch keeps this pane's 204 handling and error shaping, but the headers
 // (and therefore the bearer token) come from the shared helper. Building them
 // locally is what made every MCP call 401 against an authenticated server.
@@ -147,6 +194,9 @@ function McpPaneForSession({ session }) {
   // Still keyed defensively: a refresh in flight when this instance unmounts
   // must not apply, and mcpStateForResponse is the tested seam for that.
   const activeSessionRef = useRef(sessionId)
+  // One gate per mounted pane; see createRefreshGate.
+  const gateRef = useRef(null)
+  if (gateRef.current === null) gateRef.current = createRefreshGate()
 
   const [catalog, setCatalog] = useState([])
   const [attached, setAttached] = useState(EMPTY_ATTACHED)
@@ -157,6 +207,10 @@ function McpPaneForSession({ session }) {
 
   const refresh = useCallback(async () => {
     const forSession = sessionId
+    // Asked BEFORE any shared state is touched. A refresh for a session the
+    // user has already left must not consume a token, set loading, or fetch.
+    const token = gateRef.current.begin(forSession, activeSessionRef.current)
+    if (token === null) return
     setLoading(true)
     setError('')
     try {
@@ -170,19 +224,26 @@ function McpPaneForSession({ session }) {
         catalogResp,
         attachedResp,
       })
-      // Stale: the user switched sessions while this was in flight.
-      if (!next) return
+      // Stale: the user switched sessions while this was in flight, or a newer
+      // refresh for this same session has already been issued.
+      if (!next || !gateRef.current.mayApply(forSession, activeSessionRef.current, token)) return
       setCatalog(next.catalog)
       setAttached(next.attached)
       setScopes(next.scopes)
     } catch (err) {
-      if (activeSessionRef.current === forSession) setError(err.message)
+      if (gateRef.current.mayApply(forSession, activeSessionRef.current, token)) setError(err.message)
     } finally {
-      if (activeSessionRef.current === forSession) setLoading(false)
+      // Only the newest refresh owns the spinner; an older one clearing it
+      // would show "done" while the current request is still in flight.
+      if (gateRef.current.mayApply(forSession, activeSessionRef.current, token)) setLoading(false)
     }
   }, [sessionId])
 
   useEffect(() => {
+    const previous = activeSessionRef.current
+    // Release the token of the session being left, so the map cannot grow for
+    // the lifetime of the tab. Only the departing session is forgotten.
+    if (previous && previous !== sessionId) gateRef.current.forget(previous)
     activeSessionRef.current = sessionId
     refresh()
     return () => { activeSessionRef.current = null }
