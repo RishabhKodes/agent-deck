@@ -1,8 +1,10 @@
 package web
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -99,6 +101,70 @@ func TestVendorFilesServed(t *testing.T) {
 		}
 		if w.Body.Len() == 0 {
 			t.Errorf("GET %s: empty body", path)
+		}
+	}
+}
+
+// TestAuthTokenIsNeverPersistedToWebStorage guards the browser half of the
+// bearer-token threat boundary. main.js reads the token from the URL, holds it
+// in authTokenSignal, and strips it from the address bar; persisting it to Web
+// Storage or a cookie would survive that strip and leave the credential
+// readable by anything that later runs on the origin (an XSS, a shared kiosk
+// browser profile, a synced cookie jar).
+//
+// The app legitimately persists theme, sidebar and toast state, so this cannot
+// ban the storage APIs outright. Instead it scans every served app script for
+// a line that mentions both a persistence sink and an auth-token identifier —
+// the shape any regression here would take.
+func TestAuthTokenIsNeverPersistedToWebStorage(t *testing.T) {
+	sinks := []string{"localStorage", "sessionStorage", "indexedDB", "document.cookie"}
+	tokenIdents := []string{"authTokenSignal", "webToken", "authToken", "bearer"}
+
+	var scripts []string
+	err := fs.WalkDir(embeddedStaticFiles, "static/app", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, ".js") {
+			scripts = append(scripts, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk app scripts: %v", err)
+	}
+	if len(scripts) == 0 {
+		t.Fatal("no app scripts found; the guard would pass vacuously")
+	}
+
+	// main.js is where the token is read, so it must be in the scanned set.
+	if !slices.Contains(scripts, "static/app/main.js") {
+		t.Fatalf("static/app/main.js missing from scanned scripts: %v", scripts)
+	}
+
+	for _, path := range scripts {
+		body, err := embeddedStaticFiles.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		for i, line := range strings.Split(string(body), "\n") {
+			lower := strings.ToLower(line)
+			sink := ""
+			for _, s := range sinks {
+				if strings.Contains(lower, strings.ToLower(s)) {
+					sink = s
+					break
+				}
+			}
+			if sink == "" {
+				continue
+			}
+			for _, ident := range tokenIdents {
+				if strings.Contains(lower, strings.ToLower(ident)) {
+					t.Errorf("%s:%d writes the bearer token to %s (%q); the token must stay in memory only",
+						path, i+1, sink, strings.TrimSpace(line))
+				}
+			}
 		}
 	}
 }
