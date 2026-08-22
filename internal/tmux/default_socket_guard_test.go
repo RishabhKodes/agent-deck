@@ -85,6 +85,79 @@ func TestResolveTmuxSocketPath(t *testing.T) {
 			args: []string{"-C", "attach-session", "-t", "sess"},
 			want: filepath.Join(isolated, "tmux-501", "default"),
 		},
+		// tmux parses its global flags with getopt(3), so every separated form
+		// below has an attached and/or bundled spelling that means exactly the
+		// same thing to tmux. Verified live on tmux 3.0a: `tmux -Lfoo ls`,
+		// `tmux -CLfoo ls` and `tmux -uLfoo ls` all report the same
+		// "error connecting to /tmp/tmux-1000/foo". A resolver that only
+		// understands `-L foo` reads all three as "no socket selector" and
+		// answers with the DEFAULT socket — the wrong server.
+		{
+			name: "attached -L value",
+			env:  nil,
+			args: []string{"-Lad1031-cafe", "list-sessions"},
+			want: filepath.Join("/tmp", "tmux-501", "ad1031-cafe"),
+		},
+		{
+			name: "attached -S value",
+			env:  map[string]string{"TMUX_TMPDIR": isolated},
+			args: []string{"-S/tmp/ad-sock-xyz/s", "list-sessions"},
+			want: "/tmp/ad-sock-xyz/s",
+		},
+		{
+			name: "boolean flags bundled ahead of an attached -L",
+			env:  nil,
+			args: []string{"-CLad1031-cafe", "attach-session", "-t", "sess"},
+			want: filepath.Join("/tmp", "tmux-501", "ad1031-cafe"),
+		},
+		{
+			name: "boolean flags bundled ahead of a separated -L",
+			env:  nil,
+			args: []string{"-uL", "ad1031-cafe", "list-sessions"},
+			want: filepath.Join("/tmp", "tmux-501", "ad1031-cafe"),
+		},
+		{
+			// The command boundary still rules: capture-pane's own -S means
+			// "start line". Its attached spelling must stay invisible here for
+			// the same reason the separated one is.
+			name: "an attached -S that belongs to the COMMAND is not a socket path",
+			env:  map[string]string{"TMUX_TMPDIR": isolated},
+			args: []string{"capture-pane", "-t", "sess", "-p", "-e", "-S-2000"},
+			want: filepath.Join(isolated, "tmux-501", "default"),
+		},
+		// getopt assigns as it goes, so a repeated flag ends up holding its LAST
+		// value. Verified live on tmux 3.0a: `tmux -L zzza1 -L zzzb2 ls` reports
+		// "error connecting to /tmp/tmux-1000/zzzb2", and the same for -S.
+		// Answering with the first value names a server tmux will not talk to.
+		{
+			name: "the LAST of a repeated -L wins",
+			env:  nil,
+			args: []string{"-L", "first-name", "-L", "second-name", "list-sessions"},
+			want: filepath.Join("/tmp", "tmux-501", "second-name"),
+		},
+		{
+			name: "the LAST of a repeated -S wins",
+			env:  map[string]string{"TMUX_TMPDIR": isolated},
+			args: []string{"-S", "/tmp/first.sock", "-S", "/tmp/second.sock", "list-sessions"},
+			want: "/tmp/second.sock",
+		},
+		{
+			// `tmux -- -Lfoo ls` reports "unknown command: -Lfoo" on 3.0a: getopt
+			// stopped at --, so -Lfoo is the COMMAND and the socket is the
+			// default one. Reading a selector out of it invents a server.
+			name: "-- ends the global flags",
+			env:  map[string]string{"TMUX_TMPDIR": isolated},
+			args: []string{"--", "-Lfoo", "list-sessions"},
+			want: filepath.Join(isolated, "tmux-501", "default"),
+		},
+		{
+			// `tmux -L ' zzzspace' ls` reports "error connecting to
+			// /tmp/tmux-1000/ zzzspace" — the space is part of the name.
+			name: "whitespace in a socket name is significant",
+			env:  nil,
+			args: []string{"-L", " spaced", "list-sessions"},
+			want: filepath.Join("/tmp", "tmux-501", " spaced"),
+		},
 	}
 
 	for _, tc := range cases {
@@ -133,6 +206,33 @@ func TestAssertTmuxSpawnIsolated_RefusesUserDefaultSocket(t *testing.T) {
 			name: "keysender-shaped control client on the default socket",
 			env:  nil,
 			args: []string{"-C", "attach-session", "-t", "agentdeck_x"},
+		},
+		{
+			// The guard exists to keep a test binary off the user's real
+			// server. An -S it cannot parse resolves to the isolated
+			// TMUX_TMPDIR instead and reads as safe, so the guard waves
+			// through the exact spawn it was written to refuse.
+			name: "explicit -S at the default socket, attached spelling",
+			env:  map[string]string{"TMUX_TMPDIR": "/tmp/ad-tmux-abc"},
+			args: []string{"-S/private/tmp/tmux-501/default", "kill-server"},
+		},
+		{
+			name: "control-mode flag bundled ahead of an attached -S at the default socket",
+			env:  map[string]string{"TMUX_TMPDIR": "/tmp/ad-tmux-abc"},
+			args: []string{"-CS/tmp/tmux-501/default", "attach-session", "-t", "agentdeck_x"},
+		},
+		{
+			// The isolated -S first, the user's real server second. tmux takes
+			// the LAST one, so this argv kill-servers the user's fleet while a
+			// first-match parser reads the isolated path and calls it safe.
+			name: "an isolated -S followed by the default socket",
+			env:  map[string]string{"TMUX_TMPDIR": "/tmp/ad-tmux-abc"},
+			args: []string{"-S", "/tmp/ad-sock-xyz/s", "-S", "/private/tmp/tmux-501/default", "kill-server"},
+		},
+		{
+			name: "a name-keyed -L followed by the default socket name",
+			env:  nil,
+			args: []string{"-L", "ad1031-cafe", "-L", "default", "kill-server"},
 		},
 	}
 
