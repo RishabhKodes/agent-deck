@@ -9,15 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.14.0] - 2026-08-22
 
-Delivery honesty, TUI gauntlet fixes, and a same-day community wave: 24 merged PRs including 12 community contributions.
+Delivery honesty, TUI gauntlet fixes, and a same-day community wave: 25 merged PRs including 11 community contributions.
 
 ### Added
 
+- **First-class DeepSeek Harness (dsh) tool support**: launch, resume, status, and session management for dsh sessions across the CLI and TUI ([#1942](https://github.com/asheshgoplani/agent-deck/pull/1942)).
 - Auth-401 recovery holds aggregate by credential identity, so one dead credential halts its own sessions with one message instead of a storm ([#1963](https://github.com/asheshgoplani/agent-deck/pull/1963)).
-- Linux desktop notifications via notify-send ([#1951](https://github.com/asheshgoplani/agent-deck/pull/1951), community).
 
 ### Fixed
 
+- **A failed read can never rebuild the user's Claude config**: MCP catalog writes are refused when the prior read failed or parsed empty, closing the data-loss path behind #1956 ([#1958](https://github.com/asheshgoplani/agent-deck/pull/1958)).
 - **`worktree cleanup` cannot destroy work**: unpushed, dirty, live-process, and inspection-failure worktrees are never proposed for removal, `--force` cannot override any exclusion, facts are re-verified at deletion time, and every guard is mutation-pinned ([#2023](https://github.com/asheshgoplani/agent-deck/pull/2023), fixes [#1995](https://github.com/asheshgoplani/agent-deck/issues/1995)).
 - **CLI answers match stored truth**: `inbox drain` rejects unresolvable targets loudly with a documented exit-code contract; `list --json` carries both parent-linkage fields; JSON surfaces return raw stored model values ([#2022](https://github.com/asheshgoplani/agent-deck/pull/2022), fixes [#1991](https://github.com/asheshgoplani/agent-deck/issues/1991), [#1992](https://github.com/asheshgoplani/agent-deck/issues/1992), [#1994](https://github.com/asheshgoplani/agent-deck/issues/1994), [#2000](https://github.com/asheshgoplani/agent-deck/issues/2000)). Drain targets resolve across profiles for full ids, ambiguity is surfaced on its own exit code, and a duplicate id across profiles refuses rather than draining either ([#2030](https://github.com/asheshgoplani/agent-deck/pull/2030)).
 - **Help never mutates**: `--help`/`-h`/bare `help` at any argument position prints usage on every hook dispatcher — install and uninstall alike — instead of performing the action ([#2010](https://github.com/asheshgoplani/agent-deck/pull/2010), community, fixes [#1993](https://github.com/asheshgoplani/agent-deck/issues/1993)).
@@ -39,7 +40,7 @@ Remote visibility, restart persistence, and a large correctness wave: ~40 merged
 
 - **Remote fleets are first-class in the TUI**: per-remote `command_timeout_seconds` so large fleets stop timing out ([#1912](https://github.com/asheshgoplani/agent-deck/pull/1912)); remote group headers show running/waiting status counts like local groups ([#1913](https://github.com/asheshgoplani/agent-deck/pull/1913)); remotes render instantly on startup from a per-remote-aged cache labeled "cached, refreshing…" ([#1914](https://github.com/asheshgoplani/agent-deck/pull/1914)); the cost fetch gets its own timeout budget ([#1916](https://github.com/asheshgoplani/agent-deck/pull/1916)).
 - The web Fleet shows configured remotes with a hardened shared scanner ([#1915](https://github.com/asheshgoplani/agent-deck/pull/1915), builds on [#1869](https://github.com/asheshgoplani/agent-deck/pull/1869)); scanner lifecycle gaps closed ([#1920](https://github.com/asheshgoplani/agent-deck/pull/1920)).
-- OS notifications when a session needs attention, macOS backend ([#1893](https://github.com/asheshgoplani/agent-deck/pull/1893)); custom-tool conversation ids persist across reboot ([#1949](https://github.com/asheshgoplani/agent-deck/pull/1949), builds on [#1885](https://github.com/asheshgoplani/agent-deck/pull/1885)).
+- OS notifications when a session needs attention, macOS backend ([#1893](https://github.com/asheshgoplani/agent-deck/pull/1893)); Linux backend via notify-send ([#1951](https://github.com/asheshgoplani/agent-deck/pull/1951)); custom-tool conversation ids persist across reboot ([#1949](https://github.com/asheshgoplani/agent-deck/pull/1949), builds on [#1885](https://github.com/asheshgoplani/agent-deck/pull/1885)).
 - Sessions resume with the agent leading the pane via exec ([#1786](https://github.com/asheshgoplani/agent-deck/pull/1786)).
 - `profile list` separates internal test profiles ([#1932](https://github.com/asheshgoplani/agent-deck/pull/1932)).
 
