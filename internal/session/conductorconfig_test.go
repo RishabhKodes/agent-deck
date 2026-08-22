@@ -485,3 +485,84 @@ config_dir = %q
 		t.Errorf("buildClaudeResumeCommand must NOT contain %q when history exists at per-instance config_dir; got %q", sessionIDFlag, cmd)
 	}
 }
+
+// TestBuildClaudeResumeCommand_CustomCommand verifies that a per-session
+// custom command (i.Command from `launch -c <wrapper>`) is used on the resume
+// path, not the literal "claude" binary. The first case pins the actual F3
+// gate delta this PR introduces: when BOTH a per-session custom command AND a
+// config-level alias are present, the per-session command overrides the alias
+// AND the CLAUDE_CONFIG_DIR export is present (before this PR, the alias
+// suppressed the export). The second case confirms a config-level alias with
+// the default Command still suppresses the export.
+func TestBuildClaudeResumeCommand_CustomCommand(t *testing.T) {
+	tmpHome := setupConductorTest(t)
+	configDir := filepath.Join(tmpHome, "claude-config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	// Config carries BOTH a config_dir and a config-level alias (cdw). This
+	// is the combination the F3 gate delta turns on: the per-session custom
+	// command must override the alias and still export CLAUDE_CONFIG_DIR.
+	writeConductorConfig(t, tmpHome, fmt.Sprintf(`
+[conductors.foo.claude]
+config_dir = %q
+command = "cdw"
+`, configDir))
+	projectPath := filepath.Join(tmpHome, "project")
+	if err := os.MkdirAll(projectPath, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	sessionID := "d4bdd524-210c-47f9-a505-9bc49969e278"
+
+	// JSONL with conversation data so --resume (not --session-id) is used.
+	encoded := ConvertToClaudeDirName(projectPath)
+	projectsDir := filepath.Join(configDir, "projects", encoded)
+	if err := os.MkdirAll(projectsDir, 0o755); err != nil {
+		t.Fatalf("mkdir projects dir: %v", err)
+	}
+	jsonl := filepath.Join(projectsDir, sessionID+".jsonl")
+	body := `{"type":"user","sessionId":"` + sessionID + `","text":"hi"}` + "\n"
+	if err := os.WriteFile(jsonl, []byte(body), 0o600); err != nil {
+		t.Fatalf("write jsonl: %v", err)
+	}
+
+	// --- Case 1: per-session custom command overrides config-level alias ---
+	// Before this PR: claudeCmd resolved to "cdw" (alias), F3 gate suppressed
+	// the export. After: claudeCmd = i.Command, F3 gate does not apply, export
+	// is present. This is the delta the PR deliberately introduces.
+	inst := NewInstanceWithGroupAndTool("conductor-foo", projectPath, "conductor", "claude")
+	inst.ClaudeSessionID = sessionID
+	inst.Command = "/tmp/wrapper.sh"
+
+	cmd := inst.buildClaudeResumeCommand()
+	if !strings.Contains(cmd, "/tmp/wrapper.sh") {
+		t.Errorf("resume should use per-session custom command /tmp/wrapper.sh; got %q", cmd)
+	}
+	if strings.Contains(cmd, "cdw") {
+		t.Errorf("per-session custom command must override config-level alias cdw; got %q", cmd)
+	}
+	// F3 gate does not apply for per-session custom commands — the export
+	// should be present, matching buildClaudeCommandWithMessage's custom branch.
+	expectedExport := "export CLAUDE_CONFIG_DIR=" + configDir + ";"
+	if !strings.Contains(cmd, expectedExport) {
+		t.Errorf("resume with per-session custom command should export %q; got %q", expectedExport, cmd)
+	}
+	if !strings.Contains(cmd, "--resume "+sessionID) {
+		t.Errorf("resume should contain --resume %s; got %q", sessionID, cmd)
+	}
+
+	// --- Case 2: config-level alias with default Command suppresses export ---
+	inst2 := NewInstanceWithGroupAndTool("conductor-foo", projectPath, "conductor", "claude")
+	inst2.ClaudeSessionID = sessionID
+	inst2.Command = "claude" // default — exercises the config-level alias path
+
+	cmd2 := inst2.buildClaudeResumeCommand()
+	if !strings.Contains(cmd2, "cdw") {
+		t.Errorf("resume should use config-level alias cdw; got %q", cmd2)
+	}
+	// F3 gate applies for config-level aliases — CLAUDE_CONFIG_DIR should
+	// NOT be exported (the alias handles it itself).
+	if strings.Contains(cmd2, "export CLAUDE_CONFIG_DIR") {
+		t.Errorf("resume with config-level alias should NOT export CLAUDE_CONFIG_DIR; got %q", cmd2)
+	}
+}
