@@ -1201,25 +1201,9 @@ func isWorktreeAlreadyExistsError(err error) bool {
 }
 
 func resolveAutoParentInstance(instances []*session.Instance) *session.Instance {
-	inst, _ := resolveAutoParentInstanceChecked(instances)
-	return inst
-}
-
-// resolveAutoParentInstanceChecked distinguishes a top-level invocation (no
-// managed caller identity) from a child creation whose authoritative injected
-// identity is stale. The latter must fail at creation instead of silently
-// producing an orphan that can only be discovered in delivery dead-letter.
-func resolveAutoParentInstanceChecked(instances []*session.Instance) (*session.Instance, string) {
 	candidates := []string{
 		strings.TrimSpace(os.Getenv("AGENT_DECK_SESSION_ID")),
 		strings.TrimSpace(os.Getenv("AGENTDECK_INSTANCE_ID")),
-	}
-	authoritative := ""
-	for _, candidate := range candidates {
-		if candidate != "" {
-			authoritative = candidate
-			break
-		}
 	}
 
 	if tmuxCurrent := strings.TrimSpace(GetCurrentSessionID()); tmuxCurrent != "" {
@@ -1233,10 +1217,10 @@ func resolveAutoParentInstanceChecked(instances []*session.Instance) (*session.I
 		}
 		seen[candidate] = true
 		if inst, _, _ := ResolveSession(candidate, instances); inst != nil {
-			return inst, ""
+			return inst
 		}
 	}
-	return nil, authoritative
+	return nil
 }
 
 // resolveGroupPathForAdd resolves a user-provided group selector to a stored group path.
@@ -1539,12 +1523,7 @@ func handleAdd(profile string, args []string) {
 		// is wired into `launch` where path is already known at this point.
 		sessionGroup = resolveGroupSelection(sessionGroup, "", parentInstance.GroupPath, explicitGroupProvided, false)
 	} else if !*noParent {
-		var unresolvedParent string
-		parentInstance, unresolvedParent = resolveAutoParentInstanceChecked(instances)
-		if parentInstance == nil && unresolvedParent != "" {
-			fmt.Printf("Error: automatic parent %q could not be resolved; use --parent with a valid session or --no-parent for an intentional top-level session\n", unresolvedParent)
-			os.Exit(1)
-		}
+		parentInstance = resolveAutoParentInstance(instances)
 		if parentInstance != nil && !parentInstance.IsSubSession() {
 			sessionGroup = resolveGroupSelection(sessionGroup, "", parentInstance.GroupPath, explicitGroupProvided, false)
 		} else {

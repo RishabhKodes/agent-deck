@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -168,24 +167,13 @@ func sanitizeInboxName(id string) string {
 // The #1225 drain path layers turn_fingerprint dedup on top for at-least-once
 // delivery with exactly-once effects (see inbox_consumer.go).
 func WriteInboxEvent(parentSessionID string, event TransitionNotificationEvent) error {
-	_, err := WriteInboxEventIfNew(parentSessionID, event)
-	return err
-}
-
-// WriteInboxEventIfNew is WriteInboxEvent with the dedup decision exposed.
-func WriteInboxEventIfNew(parentSessionID string, event TransitionNotificationEvent) (bool, error) {
 	if strings.TrimSpace(parentSessionID) == "" {
-		return false, errors.New("inbox: empty parent session id")
+		return errors.New("inbox: empty parent session id")
 	}
 	path := InboxPathFor(parentSessionID)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, err
+		return err
 	}
-	fileLock, err := AcquireConfigFileLock(path)
-	if err != nil {
-		return false, fmt.Errorf("lock inbox append: %w", err)
-	}
-	defer fileLock.Release()
 
 	fp := EventFingerprint(event)
 
@@ -201,40 +189,36 @@ func WriteInboxEventIfNew(parentSessionID string, event TransitionNotificationEv
 		inboxFingerprintCache[path] = seen
 	}
 	if _, dup := seen[fp]; dup {
-		return false, nil
+		return nil
 	}
 
-	line, err := json.Marshal(inboxWireEvent{TransitionNotificationEvent: event, Fingerprint: fp})
+	// Embed the fingerprint into the persisted JSON so on-disk state is
+	// self-describing — the file-scan recovery path can reconstruct the
+	// dedup set without re-deriving fingerprints from the event body.
+	type wireEvent struct {
+		TransitionNotificationEvent
+		Fingerprint string `json:"fp,omitempty"`
+	}
+	line, err := json.Marshal(wireEvent{TransitionNotificationEvent: event, Fingerprint: fp})
 	if err != nil {
-		return false, err
-	}
-	if err := atomicAppendInboxLineLocked(path, line); err != nil {
-		return false, err
-	}
-	seen[fp] = struct{}{}
-	return true, nil
-}
-
-// atomicAppendInboxLineLocked gives an inbox append an old-or-new crash
-// boundary. It builds a complete replacement beside the inbox, fsyncs it, and
-// atomically renames it over the old file. SIGKILL before rename leaves the old
-// complete inbox; SIGKILL after rename leaves the new complete inbox. A partial
-// JSONL tail is never installed as the authoritative file.
-//
-// Caller holds inboxWriteMu.
-func atomicAppendInboxLineLocked(path string, line []byte) error {
-	existing, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	data := make([]byte, 0, len(existing)+len(line)+1)
-	data = append(data, existing...)
-	if len(data) > 0 && data[len(data)-1] != '\n' {
-		data = append(data, '\n')
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
 	}
-	data = append(data, line...)
-	data = append(data, '\n')
-	return writeFileDurable(path, data, 0o644)
+	defer f.Close()
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		return err
+	}
+	// Audit B2: fsync the append so a crash after Write cannot lose a record the
+	// producer reported as committed.
+	if err := f.Sync(); err != nil {
+		return err
+	}
+	seen[fp] = struct{}{}
+	return nil
 }
 
 // loadInboxFingerprintsLocked scans an existing inbox file and returns the
