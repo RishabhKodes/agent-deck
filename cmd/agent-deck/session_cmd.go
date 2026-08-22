@@ -3504,6 +3504,18 @@ func sendWithRetryTarget(target sendRetryTarget, message string, skipVerify bool
 	// Take the first run of non-whitespace content, capped, to avoid false
 	// positives from matching common short strings.
 	deliveryToken := messageDeliveryToken(message)
+	// presenceNeedle answers "is this message on screen", which is a different
+	// question from deliveryToken's "is this a distinctive enough string to
+	// treat as proof of delivery". The token is empty below 12 bytes, so
+	// without a fallback a short queued message like "OK" would read as absent
+	// forever and take the Ctrl+C-and-resend this guard exists to prevent.
+	// Falling back to the trimmed body can over-match a common short string,
+	// but the consequence is declining to interrupt a live target, which is the
+	// safe direction: such a message still surfaces via the #876 check.
+	presenceNeedle := deliveryToken
+	if presenceNeedle == "" {
+		presenceNeedle = strings.TrimSpace(message)
+	}
 	// attrib is the #1777 attribution gate. EVERY bare Enter in this loop —
 	// including the unsent-prompt branch, which used to press unconditionally
 	// whenever a "[Pasted text …]" marker appeared anywhere in the pane —
@@ -3517,6 +3529,9 @@ func sendWithRetryTarget(target sendRetryTarget, message string, skipVerify bool
 		time.Sleep(opts.checkDelay)
 
 		unsentPromptDetected := false
+		// bodyInPaneNow is this iteration's answer to "is the body on screen
+		// right now", deliberately not latched. See the resend branch below.
+		bodyInPaneNow := false
 		// paneNow is this iteration's observation (raw ANSI + whether the
 		// capture succeeded at all), and is what the attribution gate reads.
 		captured, captureErr := target.CapturePaneFresh()
@@ -3524,6 +3539,7 @@ func sendWithRetryTarget(target sendRetryTarget, message string, skipVerify bool
 		if paneNow.OK {
 			content := tmux.StripANSI(captured)
 			unsentPromptDetected = send.ComposerHoldsPasteMarker(captured, tmux.StripANSI) || send.HasUnsentComposerPrompt(content, message)
+			bodyInPaneNow = presenceNeedle != "" && strings.Contains(content, presenceNeedle)
 			if !sawDeliveryEvidence && deliveryToken != "" && strings.Contains(content, deliveryToken) {
 				sawDeliveryEvidence = true
 			}
@@ -3567,7 +3583,44 @@ func sendWithRetryTarget(target sendRetryTarget, message string, skipVerify bool
 				// Message may have been lost during TUI init: the prompt was
 				// visible but the input handler wasn't ready, so sent keys were
 				// discarded. Clear stale input and re-send the full message.
-				if waitingNoActivityChecks >= fullResendThreshold && fullResendCount < maxFullResends {
+				//
+				// THE GATE: fire only when the body is not on screen right now.
+				// A recovery for a body that is already there can only
+				// duplicate it, and the Ctrl+C that precedes it interrupts
+				// whatever the target is doing meanwhile. bodyInPaneNow is
+				// recomputed every iteration on purpose: "a resend would
+				// duplicate" is a claim about the present, so it needs a
+				// present-tense signal.
+				//
+				// NOT sawDeliveryEvidence, which is the obvious candidate and
+				// is wrong. It latches, and one of its sources is the composer
+				// merely HOLDING the message — the first step of the very
+				// TUI-init loss this recovery exists for. Gating on it would
+				// suppress the recovery exactly when it is needed and then,
+				// because the same flag suppresses the #876 error at the end of
+				// the budget, report the lost message as delivered. Compare
+				// sawUnsentMarker, which is tracked separately for the same
+				// provenance reason.
+				//
+				// paneNow.OK is required for a related reason one level down:
+				// bodyInPaneNow is only assigned when the capture succeeded, so
+				// without it the gate would read false by ABSENCE of an
+				// observation rather than by an observation of absence, and a
+				// failed CapturePaneFresh would re-authorize the Ctrl+C against
+				// a target that is working fine. A destructive branch should
+				// need positive evidence, not silence.
+				//
+				// History: #1979 is the busy target with the message already
+				// queued. It and a target that never received the message both
+				// fail to report "active" — they are indistinguishable BY
+				// STATUS ALONE, which is why this reaches for pane evidence
+				// instead. Ungated, the branch fired on the busy one and
+				// destroyed in-flight work at exit 0. #479 established the same
+				// double-send on the --no-wait path, which noWaitSendOptions
+				// disables outright; this keeps the recovery for the case it was
+				// written for.
+				if waitingNoActivityChecks >= fullResendThreshold && fullResendCount < maxFullResends &&
+					paneNow.OK && !bodyInPaneNow {
 					// The resend types the message and presses Enter, so it
 					// submits whatever the composer still holds. Ctrl+C is
 					// meant to empty it first — but a failed Ctrl+C, or one
