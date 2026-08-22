@@ -152,3 +152,75 @@ func TestRegistry_PrecedenceRejectsShadow(t *testing.T) {
 		t.Errorf("Match(\"claude\") = %q, want built-in %q", got, "claude")
 	}
 }
+
+// TestRegistry_MatchTokenByPath covers issue #2024: tools detected by token
+// (pi, deepseek/dsh, cursor/agent) must match when the token is the basename
+// of a path field, while near-misses that share letters or path segments
+// must still fall back to shell.
+func TestRegistry_MatchTokenByPath(t *testing.T) {
+	r := Init(nil)
+	tests := []struct {
+		name string
+		cmd  string
+		want string
+	}{
+		// pi
+		{"pi bare", "pi", "pi"},
+		{"pi absolute", "/usr/local/bin/pi", "pi"},
+		{"pi relative", "./pi", "pi"},
+		{"pi path with flags", "/usr/local/bin/pi --profile dev", "pi"},
+		{"pi env prefix", "env FOO=1 pi", "pi"},
+		{"pi env prefix path", "env FOO=1 /usr/local/bin/pi", "pi"},
+		{"pi uppercase path", "/usr/local/bin/Pi", "pi"},
+		{"pi double-quoted path with spaces", `"/opt/AI Tools/pi"`, "pi"},
+		{"pi single-quoted path with spaces", `'/opt/AI Tools/pi'`, "pi"},
+		{"pi backslash-escaped space", `/opt/AI\ Tools/pi`, "pi"},
+		{"pi spaced path with trailing flags", `"/opt/AI Tools/pi" --profile dev`, "pi"},
+		{"pi spaced path after env assignment", `env PROFILE='team dev' "/opt/AI Tools/pi" --profile dev`, "pi"},
+		{"pi near-miss epic", "epic", "shell"},
+		{"pi near-miss tapioca", "tapioca", "shell"},
+		{"pi path segment not basename", "/home/pi/bin/tool", "shell"},
+		{"pi basename with suffix", "/usr/local/bin/pip", "shell"},
+		// deepseek / dsh
+		{"dsh bare", "dsh", "deepseek"},
+		{"dsh with flags", "dsh --model x", "deepseek"},
+		{"dsh absolute", "/usr/local/bin/dsh", "deepseek"},
+		{"dsh relative", "./dsh", "deepseek"},
+		{"dsh path with flags", "./dsh --model x", "deepseek"},
+		{"dsh near-miss dshell path", "/usr/bin/dshell", "shell"},
+		{"dsh near-miss dshell bare", "dshell", "shell"},
+		{"dsh near-miss fdsh", "fdsh", "shell"},
+		{"dsh path segment not basename", "/opt/dsh/bin/other", "shell"},
+		// cursor / agent
+		{"agent bare", "agent", "cursor"},
+		{"agent absolute", "/usr/local/bin/agent", "cursor"},
+		{"agent relative", "./agent", "cursor"},
+		{"agent near-miss agent-deck", "agent-deck", "shell"},
+		{"agent path segment not basename", "/home/agent/bin/tool", "shell"},
+		// Only the executable field is basename-matched. Paths in argument
+		// position, VAR=value assignments, trailing slashes, and suffixed
+		// basenames must keep the pre-#2024 behaviour (shell / substring tool).
+		{"copilot arg path under pi home", "copilot --cwd /home/pi", "copilot"},
+		{"cursor arg path under pi home", "cursor --dir /home/pi", "cursor"},
+		{"crush arg path under pi home", "crush /home/pi", "crush"},
+		{"hermes arg path under agent home", "hermes --home /opt/agent", "hermes"},
+		{"cd pi home then bash", "cd /home/pi && bash", "shell"},
+		{"HOME assignment pi path", "HOME=/home/pi bash", "shell"},
+		{"VAR assignment pi path", "VAR=/x/pi cmd", "shell"},
+		{"ls arg path dsh", "ls /opt/dsh", "shell"},
+		{"cat arg path agent", "cat /usr/local/bin/agent", "shell"},
+		{"pi trailing slash", "pi/", "shell"},
+		{"pi trailing slash path", "/usr/local/bin/pi/", "shell"},
+		{"dsh suffixed basename", "dsh.sh", "shell"},
+		{"dsh suffixed basename path", "/usr/local/bin/dsh.sh", "shell"},
+		{"sudo prefix path", "sudo /usr/local/bin/dsh", "deepseek"},
+		{"env assignment then path", "env FOO=1 ./pi", "pi"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := r.Match(tt.cmd); got != tt.want {
+				t.Errorf("Match(%q) = %q, want %q", tt.cmd, got, tt.want)
+			}
+		})
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/asheshgoplani/agent-deck/internal/shellwords"
 )
 
 // Registry is the unified, in-memory view of every tool agent-deck knows about:
@@ -240,7 +241,11 @@ func (r *Registry) Match(cmd string) string {
 	}
 
 	lower := strings.ToLower(cmd)
-	fields := strings.Fields(lower)
+	fields, valid := shellwords.Split(lower)
+	exe := ""
+	if valid {
+		exe = shellwords.ExecutableBase(fields)
+	}
 	for _, name := range r.order {
 		bt := r.builtins[name]
 		for _, sub := range bt.detectSubstrings {
@@ -248,8 +253,13 @@ func (r *Registry) Match(cmd string) string {
 				return name
 			}
 		}
+		// Token match: every field is compared whole, and the executable field
+		// is additionally compared by basename so "/usr/local/bin/dsh" and
+		// "./pi" match like the bare command (#2024). Only the executable
+		// position gets basename treatment — argument paths such as
+		// "copilot --cwd /home/pi" must not flip detection.
 		for _, tok := range bt.detectTokens {
-			if slices.Contains(fields, tok) {
+			if slices.Contains(fields, tok) || exe == tok {
 				return name
 			}
 		}
