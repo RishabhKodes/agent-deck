@@ -21,7 +21,7 @@ func TestViewportDialogContentPinsChromeAndFocusedField(t *testing.T) {
 	}
 	body.WriteString("Tab next │ Enter create │ Esc cancel")
 
-	got := viewportDialogContent(body.String(), 76, 24)
+	got := viewportDialogContent(body.String(), 76, 24, 23)
 	plain := stripAnsi(got)
 	for _, pin := range []string{"New Session", "▶ field 21", "Enter create", "↑ more fields"} {
 		if !strings.Contains(plain, pin) {
@@ -45,7 +45,7 @@ func TestViewportDialogContentPinsEntireWrappedFooter(t *testing.T) {
 	}
 	body.WriteString("Tab next │ Shift+Tab previous │ ^S create │ Esc cancel")
 
-	got := viewportDialogContent(body.String(), 40, 24)
+	got := viewportDialogContent(body.String(), 40, 24, 23)
 	plain := stripAnsi(got)
 	for _, pin := range []string{"New Session", "▶ field 21", "^S", "create", "Esc cancel"} {
 		if !strings.Contains(plain, pin) {
@@ -59,8 +59,45 @@ func TestViewportDialogContentPinsEntireWrappedFooter(t *testing.T) {
 
 func TestViewportDialogContentDoesNotChangeTallLayout(t *testing.T) {
 	const content = "New Session\n  in group: default\n\n▶ Name:\n  demo\n\nEnter create"
-	if got := viewportDialogContent(content, 76, 42); got != content {
+	if got := viewportDialogContent(content, 76, 42, 3); got != content {
 		t.Fatalf("160x48 content changed:\n got %q\nwant %q", got, content)
+	}
+}
+
+func TestViewportDialogContentUsesHeaderHeightAndFocusedRowIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		width       int
+		height      int
+		contextLine string
+	}{
+		{name: "100x30", width: 76, height: 24, contextLine: "  in group: " + strings.Repeat("context-", 11)},
+		{name: "160x48", width: 136, height: 42, contextLine: "  in group: " + strings.Repeat("context-", 11)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logical := []string{"New Session", tc.contextLine, "", "  ▶ repeated picker glyph"}
+			for i := 0; i < 60; i++ {
+				logical = append(logical, fmt.Sprintf("  field %02d", i))
+			}
+			focusLine := len(logical)
+			logical = append(logical, "▶ selected row identity", "  selected value", "Enter create │ Esc cancel")
+			got := viewportDialogContent(strings.Join(logical, "\n"), tc.width, tc.height, focusLine)
+			plain := stripAnsi(got)
+			for _, pin := range []string{"New Session", "in group:", "selected row", "Enter create"} {
+				if !strings.Contains(plain, pin) {
+					t.Fatalf("%s viewport lost %q:\n%s", tc.name, pin, plain)
+				}
+			}
+			if strings.Contains(plain, "repeated picker glyph") {
+				t.Fatalf("%s anchored the first repeated glyph instead of selected row identity:\n%s", tc.name, plain)
+			}
+			if gotContexts := strings.Count(plain, "context-"); gotContexts != 11 {
+				t.Fatalf("%s retained %d/11 wrapped group-context segments:\n%s", tc.name, gotContexts, plain)
+			}
+			if gotHeight := lipgloss.Height(got); gotHeight > tc.height {
+				t.Fatalf("%s content height = %d, want <= %d", tc.name, gotHeight, tc.height)
+			}
+		})
 	}
 }
 
@@ -81,6 +118,55 @@ func TestNewDialogFits100x30AtModelFocus(t *testing.T) {
 	}
 	if got := lipgloss.Height(view); got > 30 {
 		t.Fatalf("100x30 dialog rendered %d rows", got)
+	}
+}
+
+func TestNewDialogFits100x30AtIndentedClaudeOptionFocus(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		focusIndex int
+		want       string
+	}{
+		{name: "extra args", focusIndex: 5, want: "▶ Extra args:"},
+		{name: "start query", focusIndex: 6, want: "▶ Start query:"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := NewNewDialog()
+			d.SetDefaultTool("claude")
+			d.SetSize(100, 30)
+			d.Show()
+			d.focusIndex = d.indexOf(focusOptions)
+			d.updateFocus()
+			d.claudeOptions.focusIndex = tc.focusIndex
+			d.claudeOptions.updateInputFocus()
+
+			view := d.View()
+			plain := stripAnsi(view)
+			for _, pin := range []string{"New Session", tc.want, "create"} {
+				if !strings.Contains(plain, pin) {
+					t.Fatalf("100x30 Claude-options view lost %q:\n%s", pin, plain)
+				}
+			}
+			if got := lipgloss.Height(view); got > 30 {
+				t.Fatalf("100x30 dialog rendered %d rows", got)
+			}
+		})
+	}
+}
+
+func TestClaudeOptionsFocusedLineTracksConditionalRows(t *testing.T) {
+	p := NewClaudeOptionsPanel()
+	p.Focus()
+	p.sessionMode = 2
+	p.skipPermissions = true
+	p.autoMode = true
+	p.focusIndex = 7 // Start query, after the conditional resume and warning rows.
+	if got, want := p.FocusedLine(), 9; got != want {
+		t.Fatalf("Start query logical line = %d, want %d", got, want)
+	}
+	lines := strings.Split(stripAnsi(p.View()), "\n")
+	if got := lines[p.FocusedLine()]; !strings.Contains(got, "Start query:") {
+		t.Fatalf("focused identity resolved to %q, want Start query row", got)
 	}
 }
 

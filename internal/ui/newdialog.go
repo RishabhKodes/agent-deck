@@ -228,7 +228,7 @@ type NewDialog struct {
 // while scrolling the form body around the focused control.  Lip Gloss Place
 // does not clip oversized content, so without this an ordinary 100x30 terminal
 // loses both ends of the form (#896).
-func viewportDialogContent(content string, width, height int) string {
+func viewportDialogContent(content string, width, height, focusLogicalLine int) string {
 	if width < 1 || height < 1 {
 		return content
 	}
@@ -256,15 +256,26 @@ func viewportDialogContent(content string, width, height int) string {
 		footerHeight = lipgloss.Height(lipgloss.NewStyle().Width(width).Render(logicalLines[len(logicalLines)-1]))
 	}
 	footerHeight = min(footerHeight, len(lines)-1)
-	headerEnd := min(2, len(lines)-footerHeight)
+	// The first two logical rows are the dialog identity and group context, but
+	// either may wrap. Measure their actual rendered height instead of assuming
+	// they consume two terminal rows.
+	headerLogicalEnd := min(2, len(logicalLines))
+	headerEnd := lipgloss.Height(lipgloss.NewStyle().Width(width).Render(
+		strings.Join(logicalLines[:headerLogicalEnd], "\n"),
+	))
+	headerEnd = min(headerEnd, len(lines)-footerHeight)
 	bodyStart, bodyEnd := headerEnd, len(lines)-footerHeight
 	footer := lines[bodyEnd:]
 	focus := bodyStart
-	for i := bodyStart; i < bodyEnd; i++ {
-		if strings.Contains(stripAnsi(lines[i]), "▶") {
-			focus = i
-			break
-		}
+	if focusLogicalLine >= headerLogicalEnd && focusLogicalLine < len(logicalLines)-1 {
+		// Resolve the selected logical row to its visual row before slicing. This
+		// preserves row identity when picker entries and controls reuse ▶.
+		throughFocus := lipgloss.NewStyle().Width(width).Render(
+			strings.Join(logicalLines[:focusLogicalLine+1], "\n"),
+		)
+		focusLine := lipgloss.NewStyle().Width(width).Render(logicalLines[focusLogicalLine])
+		focus = lipgloss.Height(throughFocus) - lipgloss.Height(focusLine)
+		focus = max(bodyStart, min(focus, bodyEnd-1))
 	}
 
 	// Reserve both indicator rows initially. Unused indicators are returned to
@@ -2733,6 +2744,16 @@ func (d *NewDialog) View() string {
 
 	// Build content
 	var content strings.Builder
+	focusLogicalLine := -1
+	writeActiveLabel := func(label string) {
+		focusLogicalLine = strings.Count(content.String(), "\n")
+		content.WriteString(activeLabelStyle.Render(label))
+	}
+	markFocusedRow := func(target focusTarget) {
+		if cur == target {
+			focusLogicalLine = strings.Count(content.String(), "\n")
+		}
+	}
 
 	// Title with parent group info
 	content.WriteString(titleStyle.Render("New Session"))
@@ -2804,7 +2825,7 @@ func (d *NewDialog) View() string {
 
 	// Name input
 	if cur == focusName {
-		content.WriteString(activeLabelStyle.Render("▶ Name:"))
+		writeActiveLabel("▶ Name:")
 	} else {
 		content.WriteString(labelStyle.Render("  Name:"))
 	}
@@ -2817,10 +2838,14 @@ func (d *NewDialog) View() string {
 	// The Multi-repo toggle and its path list move below the common fields
 	// (see renderMultiRepoSection, called after the Branch input). In multi-repo
 	// mode the single Path field is hidden — its list renders below the fold.
+	markFocusedRow(focusCommand)
 	d.renderCommandSection(&content, cur)
+	markFocusedRow(focusModel)
 	d.renderModelSection(&content, cur, dialogWidth)
+	markFocusedRow(focusReasoningEffort)
 	d.renderReasoningEffortSection(&content, cur)
 	if !d.multiRepoEnabled {
+		markFocusedRow(focusPath)
 		d.renderSinglePathSection(&content, cur, dialogWidth)
 	}
 
@@ -2832,6 +2857,7 @@ func (d *NewDialog) View() string {
 	if cur == focusCommand {
 		worktreeLabel = "Create in worktree (w)"
 	}
+	markFocusedRow(focusWorktree)
 	content.WriteString(renderCheckboxLine(worktreeLabel, d.worktreeEnabled, cur == focusWorktree))
 
 	// Docker sandbox checkbox — individually focusable.
@@ -2839,6 +2865,7 @@ func (d *NewDialog) View() string {
 	if cur == focusCommand {
 		sandboxLabel = "Run in Docker sandbox (s)"
 	}
+	markFocusedRow(focusSandbox)
 	content.WriteString(renderCheckboxLine(sandboxLabel, d.sandboxEnabled, cur == focusSandbox))
 
 	// Inherited Docker settings (only visible when sandbox is enabled).
@@ -2855,7 +2882,7 @@ func (d *NewDialog) View() string {
 		summary := fmt.Sprintf("%d active", len(d.inheritedSettings))
 		toggleLine := fmt.Sprintf("%s Docker Settings (%s)", arrow, summary)
 		if focused {
-			content.WriteString(activeLabelStyle.Render("▶ " + toggleLine))
+			writeActiveLabel("▶ " + toggleLine)
 		} else {
 			content.WriteString("  " + dimStyle.Render(toggleLine))
 		}
@@ -2879,7 +2906,7 @@ func (d *NewDialog) View() string {
 	if len(d.conductorSessions) > 0 {
 		focused := cur == focusConductor
 		if focused {
-			content.WriteString(activeLabelStyle.Render("▶ Conducting parent:"))
+			writeActiveLabel("▶ Conducting parent:")
 		} else {
 			content.WriteString(labelStyle.Render("  Conducting parent:"))
 		}
@@ -2922,7 +2949,7 @@ func (d *NewDialog) View() string {
 	if d.worktreeEnabled {
 		content.WriteString("\n")
 		if cur == focusBranch {
-			content.WriteString(activeLabelStyle.Render("▶ Branch:"))
+			writeActiveLabel("▶ Branch:")
 		} else {
 			content.WriteString(labelStyle.Render("  Branch:"))
 		}
@@ -2940,11 +2967,16 @@ func (d *NewDialog) View() string {
 	// Multi-repo toggle (below the fold, UX top-3 #3). Its path list renders
 	// here when enabled; in the common single-repo case it's just a checkbox.
 	content.WriteString("\n")
+	markFocusedRow(focusMultiRepo)
 	d.renderMultiRepoSection(&content, cur)
 
 	// Tool options panel
 	if d.toolOptions != nil {
 		content.WriteString("\n")
+		panelStart := strings.Count(content.String(), "\n")
+		if cur == focusOptions {
+			focusLogicalLine = panelStart + d.toolOptions.FocusedLine()
+		}
 		content.WriteString(d.toolOptions.View())
 	}
 
@@ -3024,7 +3056,7 @@ func (d *NewDialog) View() string {
 	innerWidth := max(1, dialogWidth-8)
 	maxContentHeight := d.height - 6
 	fullContent := content.String()
-	viewported := viewportDialogContent(fullContent, innerWidth, maxContentHeight)
+	viewported := viewportDialogContent(fullContent, innerWidth, maxContentHeight, focusLogicalLine)
 
 	// Dropdown anchors are based on visual lines. Recompute them after the
 	// viewport has wrapped/scrolled so a picker follows its focused input.
