@@ -152,6 +152,16 @@ const (
 // (shows all sessions except error/stopped). Change this constant to rebind.
 const FilterKeyActive = "%"
 
+// FilterKeyError is the keyboard shortcut for the error-only status filter.
+// Keep it distinct from CostDashboardKey: advertised keys must have exactly
+// one meaning in the overview context, regardless of whether cost tracking is
+// available.
+const FilterKeyError = "&"
+
+// CostDashboardKey opens the cost dashboard. It is deliberately not reused as
+// a conditional fallback for another action.
+const CostDashboardKey = "$"
+
 // FilterKeyArchived toggles the archived-sessions list view.
 const FilterKeyArchived = "^"
 
@@ -6301,6 +6311,7 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return h, h.fetchRemoteSessions
 
 	case remoteSessionRestartedMsg:
+		delete(h.resumingSessions, remoteRestartAnimationID(msg.remoteName, msg.sessionID))
 		if msg.err != nil {
 			h.setError(fmt.Errorf("failed to restart remote session: %w", msg.err))
 			return h, nil
@@ -8459,16 +8470,12 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return h.tryQuit()
 
-	case "U":
+	case "esc":
 		// Dismiss the >5-releases-behind update nudge for this session.
-		// Only meaningful when the nudge is actually showing — otherwise
-		// fall through so other "U"-bound paths can handle it.
 		if h.shouldRenderUpdateNudge() {
 			h.handleUpdateNudgeDismiss(msg)
 			return h, nil
 		}
-
-	case "esc":
 		// Dismiss maintenance banner if visible
 		if h.maintenanceMsg != "" {
 			h.maintenanceMsg = ""
@@ -9689,6 +9696,12 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return h, h.restartSession(item.Session)
 				}
 			} else if item.Type == session.ItemTypeRemoteSession && item.RemoteSession != nil {
+				restartID := remoteRestartAnimationID(item.RemoteName, item.RemoteSession.ID)
+				if _, restarting := h.resumingSessions[restartID]; restarting {
+					h.setError(fmt.Errorf("remote session is restarting, please wait..."))
+					return h, nil
+				}
+				h.resumingSessions[restartID] = time.Now()
 				return h, h.restartRemoteSession(item.RemoteName, item.RemoteSession.ID, item.RemoteSession.Title)
 			}
 		}
@@ -9918,14 +9931,18 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		h.rebuildFlatItems()
 		return h, nil
 
-	case "$", "shift+4":
-		// Cost dashboard (when cost tracking is active), otherwise filter to error sessions
-		if h.costStore != nil {
-			h.showCostDashboard = true
-			h.costDashboard = newCostDashboard(h.costStore, h.width, h.height)
+	case CostDashboardKey, "shift+4":
+		// Cost dashboard (when cost tracking is active).
+		if h.costStore == nil {
+			h.setError(fmt.Errorf("Cost Dashboard unavailable: state database is missing; restart agent-deck with a writable config directory to enable it"))
 			return h, nil
 		}
-		// Fallback: filter to error sessions only
+		h.showCostDashboard = true
+		h.costDashboard = newCostDashboard(h.costStore, h.width, h.height)
+		return h, nil
+
+	case FilterKeyError, "shift+7":
+		// Filter to error sessions only.
 		if h.statusFilter == session.StatusError {
 			h.statusFilter = "" // Toggle off
 		} else {
@@ -13530,6 +13547,10 @@ type remoteSessionRestartedMsg struct {
 	sessionID  string
 	title      string
 	err        error
+}
+
+func remoteRestartAnimationID(remoteName, sessionID string) string {
+	return "remote:" + remoteName + ":" + sessionID
 }
 
 type remoteSessionCreatedMsg struct {
@@ -18684,6 +18705,11 @@ func (h *Home) renderPreviewPane(width, height int) string {
 		keyStyle := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true)
 
 		b.WriteString(warnStyle.Render("✕ No tmux session running"))
+		if restartKey := h.actionKey(hotkeyRestart); restartKey != "" {
+			b.WriteString("   ")
+			b.WriteString(keyStyle.Render(restartKey))
+			b.WriteString(dimStyle.Render(" Restart"))
+		}
 		b.WriteString("\n\n")
 		b.WriteString(dimStyle.Render("This can happen if:"))
 		b.WriteString("\n")
@@ -18695,12 +18721,6 @@ func (h *Home) renderPreviewPane(width, height int) string {
 		b.WriteString("\n\n")
 		b.WriteString(dimStyle.Render("Actions:"))
 		b.WriteString("\n")
-		if restartKey := h.actionKey(hotkeyRestart); restartKey != "" {
-			b.WriteString("  ")
-			b.WriteString(keyStyle.Render(restartKey))
-			b.WriteString(dimStyle.Render(" Start   - create and start tmux session"))
-			b.WriteString("\n")
-		}
 		if selected.CanRestartFresh() {
 			if restartFreshKey := h.actionKey(hotkeyRestartFresh); restartFreshKey != "" {
 				b.WriteString("  ")
@@ -20312,7 +20332,7 @@ func (h *Home) renderFilterBarHint() string {
 		mark("!", h.statusFilter == session.StatusRunning) +
 		mark("@", h.statusFilter == session.StatusWaiting) +
 		mark("#", h.statusFilter == session.StatusIdle) +
-		mark("$", h.statusFilter == session.StatusError) +
+		mark(FilterKeyError, h.statusFilter == session.StatusError) +
 		dim.Render(" filter • ") +
 		mark("0", h.statusFilter == "") +
 		dim.Render(" all • ") +

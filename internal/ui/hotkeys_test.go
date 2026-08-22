@@ -1,6 +1,159 @@
 package ui
 
-import "testing"
+import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"strconv"
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/asheshgoplani/agent-deck/internal/session"
+)
+
+// TestAdvertisedOverviewBindingsHaveSingleMeaning walks the real handleMainKey
+// dispatcher. Configurable bindings are assigned to the switch clause that
+// consumes their canonical key, while fixed cases are read directly from that
+// same switch. Thus adding a new literal route cannot bypass this invariant.
+func TestAdvertisedOverviewBindingsHaveSingleMeaning(t *testing.T) {
+	bindings := mainDispatcherBindings(t)
+	seen := make(map[string]string)
+	for _, binding := range bindings {
+		for _, alias := range hotkeyAliases(binding.key) {
+			if previous, ok := seen[alias]; ok && previous != binding.action {
+				t.Errorf("overview dispatches %q to both %q and %q", alias, previous, binding.action)
+				continue
+			}
+			seen[alias] = binding.action
+		}
+	}
+}
+
+type dispatcherBinding struct{ key, action string }
+
+func mainDispatcherBindings(t *testing.T) []dispatcherBinding {
+	t.Helper()
+	fset := token.NewFileSet()
+	packages, err := parser.ParseDir(fset, ".", func(info os.FileInfo) bool {
+		return strings.HasSuffix(info.Name(), ".go") && !strings.HasSuffix(info.Name(), "_test.go")
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := packages["ui"]
+	if pkg == nil {
+		t.Fatal("ui package not found")
+	}
+	var bindings []dispatcherBinding
+	add := func(key, action string) { bindings = append(bindings, dispatcherBinding{key: key, action: action}) }
+	for _, file := range pkg.Files {
+		ast.Inspect(file, func(n ast.Node) bool {
+			fn, ok := n.(*ast.FuncDecl)
+			if !ok || fn.Name.Name != "handleMainKey" {
+				return true
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				sw, ok := n.(*ast.SwitchStmt)
+				if !ok {
+					return true
+				}
+				tag, ok := sw.Tag.(*ast.Ident)
+				if !ok || tag.Name != "key" {
+					return true
+				}
+				for _, stmt := range sw.Body.List {
+					clause, ok := stmt.(*ast.CaseClause)
+					if !ok {
+						continue
+					}
+					action := "dispatcher-clause@" + strconv.Itoa(int(clause.Pos()))
+					for _, expr := range clause.List {
+						switch e := expr.(type) {
+						case *ast.BasicLit:
+							if e.Kind == token.STRING {
+								if key, err := strconv.Unquote(e.Value); err == nil {
+									add(key, action)
+								}
+							}
+						case *ast.IndexExpr:
+							if id, ok := e.X.(*ast.Ident); ok && id.Name == "defaultHotkeyBindings" {
+								if keyID, ok := e.Index.(*ast.Ident); ok {
+									if actionName := dispatcherConstantValue(pkg, keyID.Name); actionName != "" {
+										if key := defaultHotkeyBindings[actionName]; key != "" {
+											add(key, action)
+										}
+									}
+								}
+							}
+						case *ast.Ident:
+							// Resolve dispatcher constants without duplicating their values here.
+							if key := dispatcherConstantValue(pkg, e.Name); key != "" {
+								add(key, action)
+							}
+						}
+					}
+				}
+				return false
+			})
+			return false
+		})
+	}
+	return bindings
+}
+
+func dispatcherConstantValue(pkg *ast.Package, name string) string {
+	for _, file := range pkg.Files {
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				value, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for i, ident := range value.Names {
+					if ident.Name != name || i >= len(value.Values) {
+						continue
+					}
+					if lit, ok := value.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+						key, _ := strconv.Unquote(lit.Value)
+						return key
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func TestCostAndErrorFilterKeysAlwaysHaveSeparateMeanings(t *testing.T) {
+	home := NewHome()
+	home.statusFilter = session.StatusRunning
+
+	// With no cost store, $ remains reserved for Cost Dashboard and must not
+	// fall back to changing the filter.
+	home.handleMainKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(CostDashboardKey)})
+	if home.statusFilter != session.StatusRunning {
+		t.Fatalf("%s changed status filter to %q without a cost store", CostDashboardKey, home.statusFilter)
+	}
+	if home.err == nil || home.err.Error() != "Cost Dashboard unavailable: state database is missing; restart agent-deck with a writable config directory to enable it" {
+		t.Fatalf("missing cost store feedback = %v", home.err)
+	}
+
+	errSession := session.NewInstance("errored", t.TempDir())
+	errSession.Status = session.StatusError
+	home.instances = []*session.Instance{errSession}
+	home.groupTree = session.NewGroupTree(home.instances)
+	home.handleMainKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(FilterKeyError)})
+	if home.statusFilter != session.StatusError {
+		t.Fatalf("%s status filter = %q, want error", FilterKeyError, home.statusFilter)
+	}
+}
 
 func TestResolveHotkeysOverridesAndUnbinds(t *testing.T) {
 	bindings := resolveHotkeys(map[string]string{
