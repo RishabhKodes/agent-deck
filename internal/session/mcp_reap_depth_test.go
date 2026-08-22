@@ -66,9 +66,15 @@ func TestParsePSCommandNames(t *testing.T) {
 		}
 	}
 
-	// the same snapshot must still yield a usable parent/child map, since both
-	// classifications are made against one ps call by design
-	children := parsePSParentChildMap(procTable)
+	// The same snapshot must still yield the valid parent/child relationships,
+	// since both classifications are made against one ps call by design. Unlike
+	// parsePSCommandNames, #1687 deliberately makes the process-tree parser
+	// report malformed rows (the "garbage line" above) so an incomplete process
+	// scan cannot be mistaken for an empty one.
+	children, err := parsePSParentChildMap(procTable)
+	if err == nil {
+		t.Error("malformed ps row must be reported")
+	}
 	if len(children[100]) != 1 || children[100][0] != 200 {
 		t.Errorf("parent/child map lost entries on 3-column output: %#v", children)
 	}
