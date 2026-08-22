@@ -568,3 +568,33 @@ func ReadAndTruncateInbox(parentSessionID string) ([]TransitionNotificationEvent
 	delete(inboxFingerprintCache, path)
 	return out, nil
 }
+
+// ReadInboxEventsForDisplay is a deliberately UI-grade snapshot, not the
+// durable inbox consumer API. It never consumes, locks, repairs, or promises
+// delivery semantics; it skips malformed/torn records and reports a missing
+// inbox as an empty display. Durable consumers must not use this function.
+func ReadInboxEventsForDisplay(parentSessionID string) ([]TransitionNotificationEvent, error) {
+	if strings.TrimSpace(parentSessionID) == "" {
+		return nil, errors.New("inbox peek: empty parent session id")
+	}
+	data, err := os.ReadFile(InboxPathFor(parentSessionID))
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []TransitionNotificationEvent
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var ev TransitionNotificationEvent
+		if json.Unmarshal([]byte(line), &ev) != nil {
+			continue
+		}
+		out = append(out, ev)
+	}
+	return out, nil
+}
