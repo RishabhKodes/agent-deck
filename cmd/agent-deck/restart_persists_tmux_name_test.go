@@ -20,9 +20,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // skipIfNoTmuxBinaryCLI skips when tmux is absent; these tests drive a real

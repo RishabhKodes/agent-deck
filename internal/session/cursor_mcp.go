@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/atomicfile"
+	"github.com/RishabhKodes/agent-deck/internal/atomicfile"
 )
 
 // GetCursorConfigDir returns ~/.cursor (Cursor IDE / Agent CLI config).

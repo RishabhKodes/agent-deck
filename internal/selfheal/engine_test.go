@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // spyExecutor records every Execute call. In observe mode it must NEVER be

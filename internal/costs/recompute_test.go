@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
 )
 
 // seedEvent inserts one cost_event row directly via WriteCostEvent.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestRevive_CLI_AllFlag_TriggersReviver(t *testing.T) {

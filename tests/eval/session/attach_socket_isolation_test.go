@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 // TestEval_Session_AttachRestart_SocketIsolation_RealTmux is the v1.7.55

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // addCreatingPlaceholder registers a creating-session placeholder and rebuilds

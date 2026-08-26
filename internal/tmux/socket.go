@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmuxutf8"
+	"github.com/RishabhKodes/agent-deck/internal/tmuxutf8"
 )
 
 // tmuxSubprocessWaitDelay is the deadline cmd.Wait() waits for stdio I/O

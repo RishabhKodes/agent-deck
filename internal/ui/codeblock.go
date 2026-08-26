@@ -7,9 +7,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/asheshgoplani/agent-deck/internal/clipboard"
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/clipboard"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // CodeBlock is a single fenced code block extracted from a session's output.

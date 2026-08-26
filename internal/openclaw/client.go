@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 var clientLog = logging.ForComponent("openclaw")

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // TestInstanceServiceUnitOwnership_NoTmuxSession_YieldsSkipRecord: an

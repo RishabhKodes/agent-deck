@@ -14,7 +14,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
 )
 
 // maxSourceSymlinkHops bounds how many symlink levels a materialization source

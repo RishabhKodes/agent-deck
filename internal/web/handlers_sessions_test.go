@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // fakeMutator is a test double for SessionMutator that delegates to function fields.

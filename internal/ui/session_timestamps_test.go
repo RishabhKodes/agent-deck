@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // Session row timestamp badge. The "5m ago" / "1h ago" suffix appears on

@@ -3,8 +3,8 @@ package web
 import (
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/sessionstatus"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/sessionstatus"
 )
 
 // refreshSnapshotHookStatuses re-applies the hook fast-path Status mapping to

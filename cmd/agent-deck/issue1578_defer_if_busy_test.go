@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/send"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/send"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // seedDeferHookFile writes an on-disk hook status file for instanceID, the same

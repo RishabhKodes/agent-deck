@@ -15,7 +15,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestApplyRemoteSessionOrder_Drift_Issue1875(t *testing.T) {

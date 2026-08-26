@@ -24,7 +24,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/termreply"
+	"github.com/RishabhKodes/agent-deck/internal/termreply"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

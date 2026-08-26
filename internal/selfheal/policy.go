@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // Caps holds the §3.3 rate limits. Defaults mirror the rails agent-deck already

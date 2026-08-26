@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/selfheal"
+	"github.com/RishabhKodes/agent-deck/internal/selfheal"
 )
 
 func TestBuildSelfHealCandidate_FoldsSignals(t *testing.T) {

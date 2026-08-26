@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 // initTestLogging redirects the global logger to a temp dir's debug.log

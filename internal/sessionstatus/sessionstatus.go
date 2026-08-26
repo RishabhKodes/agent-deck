@@ -31,7 +31,7 @@ package sessionstatus
 import (
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // Freshness windows. Mirror the constants in internal/session/instance.go

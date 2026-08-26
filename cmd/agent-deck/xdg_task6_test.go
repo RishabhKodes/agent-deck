@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func setupTask6XDGEnv(t *testing.T) (home, xdgConfigHome, xdgDataHome, xdgCacheHome string) {

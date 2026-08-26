@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func remoteInfo(remote, id, title, status string) session.RemoteSessionInfo {

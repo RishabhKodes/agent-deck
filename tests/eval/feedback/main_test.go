@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 // TestMain releases the shared agent-deck binary build dir after the package's

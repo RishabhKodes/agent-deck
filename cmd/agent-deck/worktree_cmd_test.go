@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
 )
 
 // TestMain is in testmain_test.go - sets AGENTDECK_PROFILE=_test

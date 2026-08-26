@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 // The Command Center is the embedded, live, two-way fleet god-view (see

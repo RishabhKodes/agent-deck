@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // RemoteFleetLoader is a server-owned source of remote fleet snapshots.

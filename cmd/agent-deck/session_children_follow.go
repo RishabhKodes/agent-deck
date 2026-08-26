@@ -6,7 +6,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // childRow is one child in `session children` output — shared by the one-shot

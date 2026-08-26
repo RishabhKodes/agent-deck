@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/web"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/web"
 )
 
 // benchInstances builds n sessions with roughly a third archived, matching a

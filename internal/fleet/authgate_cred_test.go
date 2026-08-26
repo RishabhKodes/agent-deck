@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // SubstateAuthGate's #1816 credential grouping, and the default-unchanged

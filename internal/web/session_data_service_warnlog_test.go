@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestDefaultLoadHookStatuses_WarnsOnUnmarshalError verifies that a

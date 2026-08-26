@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // triageResult is the structured output written by a triage Claude session (D-07).

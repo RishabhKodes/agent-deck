@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestMenuSessionExposesAllEditableFields verifies that every session field

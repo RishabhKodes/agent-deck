@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // Regression for the "rebind logged but never persisted" gap.

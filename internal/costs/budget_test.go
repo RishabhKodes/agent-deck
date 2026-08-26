@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
 )
 
 func TestBudgetCheck_NoBudget(t *testing.T) {

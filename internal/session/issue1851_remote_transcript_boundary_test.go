@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Regression tests for https://github.com/asheshgoplani/agent-deck/issues/1851.
+// Regression tests for https://github.com/RishabhKodes/agent-deck/issues/1851.
 //
 // An --ssh session's conversation lives on the remote host, but everything that
 // resolves a transcript on the controller is keyed on Instance.ProjectPath —

@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // insertKeySender is the local interface the insert-mode dispatch path uses

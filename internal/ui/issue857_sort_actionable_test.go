@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestSessionList_SortByActionable_RegressionFor857 sets up five sessions in

@@ -1,6 +1,6 @@
 package ui
 
-import "github.com/asheshgoplani/agent-deck/internal/session"
+import "github.com/RishabhKodes/agent-deck/internal/session"
 
 func userConfigPathForDisplay() string {
 	path, err := session.GetUserConfigPath()

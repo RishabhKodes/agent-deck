@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // This regression test pins the symlink-preserving write for the Cursor MCP

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/ui"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/ui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"

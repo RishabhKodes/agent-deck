@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // Force TrueColor so lipgloss emits actual ANSI escapes during tests;

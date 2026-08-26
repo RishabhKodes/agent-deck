@@ -8,8 +8,8 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/ui"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/ui"
 )
 
 // errAttachNoTTY signals that an interactive attach was requested (e.g. via

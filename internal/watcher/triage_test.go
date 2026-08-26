@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // fakeClock is a controllable clock for test determinism.

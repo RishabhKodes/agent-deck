@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/asheshgoplani/agent-deck/internal/terminal"
+	"github.com/RishabhKodes/agent-deck/internal/terminal"
 )
 
 // Issue #1093 (by @ddorman-dn): Shift+Enter, shipped in #1077, did not actually

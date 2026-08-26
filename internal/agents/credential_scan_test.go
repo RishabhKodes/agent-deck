@@ -166,7 +166,7 @@ func TestScanForCredentialsRelativePaths(t *testing.T) {
 		"| secret | internal/session/userconfig.go |\n",
 		"The secret loader is cmd/agent-deck/agents_cmd.go\n",
 		"Logs live in /home/ashesh/.local/share/agent-deck/logs/transition.log\n",
-		"See https://github.com/asheshgoplani/agent-deck/pull/1996 for context.\n",
+		"See https://github.com/RishabhKodes/agent-deck/pull/1996 for context.\n",
 		"Run ./scripts/overnight-manager.sh from the repo root.\n",
 	}
 	for _, line := range mustCopy {

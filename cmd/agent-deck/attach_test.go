@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // Under `go test`, stdin/stdout are pipes, not a terminal. The attach guard

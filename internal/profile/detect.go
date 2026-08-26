@@ -1,7 +1,7 @@
 package profile
 
 import (
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // DetectCurrentProfile returns the active agent-deck profile for the current

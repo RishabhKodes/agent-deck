@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
-	"github.com/asheshgoplani/agent-deck/internal/docker"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/docker"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestPreAcceptCodexTrust_CreatesTrustedProjectEntry(t *testing.T) {

@@ -13,10 +13,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/atomicfile"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/mcppool"
-	"github.com/asheshgoplani/agent-deck/internal/safeio"
+	"github.com/RishabhKodes/agent-deck/internal/atomicfile"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/mcppool"
+	"github.com/RishabhKodes/agent-deck/internal/safeio"
 )
 
 var mcpCatLog = logging.ForComponent(logging.CompMCP)

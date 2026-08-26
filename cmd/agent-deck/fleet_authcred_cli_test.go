@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/fleet"
+	"github.com/RishabhKodes/agent-deck/internal/fleet"
 )
 
 // CLI surface for #1816 credential grouping: the flag is opt-in, and the

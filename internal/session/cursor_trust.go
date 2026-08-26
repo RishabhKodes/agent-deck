@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/docker"
+	"github.com/RishabhKodes/agent-deck/internal/docker"
 )
 
 // cursorSandboxHome and cursorSandboxWorkDir match internal/docker/config.go

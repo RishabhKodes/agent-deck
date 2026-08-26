@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestIssue1101_RemotePreview_RendersClaudeFormattedContent asserts that when

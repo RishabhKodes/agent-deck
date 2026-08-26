@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // handleSessionRemove deletes a session from the registry.

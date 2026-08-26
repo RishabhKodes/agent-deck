@@ -7,7 +7,7 @@ import (
 )
 
 // TestCreateWorktree_NewBranch_BranchesFromFreshOriginMain_RegressionFor973
-// pins the fix for https://github.com/asheshgoplani/agent-deck/issues/973.
+// pins the fix for https://github.com/RishabhKodes/agent-deck/issues/973.
 //
 // Bug: a worker spawned via `agent-deck launch -w <branch> -b` created the new
 // branch from whatever the caller's local HEAD pointed to. When the caller had

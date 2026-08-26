@@ -43,8 +43,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/credrefresh"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/credrefresh"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // stringSliceFlag collects a repeatable string flag (--config-dir a --config-dir b).

@@ -32,7 +32,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // MCPTarget identifies the session whose MCP configuration is being read or

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
 )
 
 // Tier-1 WARM perf gate for the storage-mediated group lifecycle.

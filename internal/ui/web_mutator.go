@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/git"
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/vcs"
-	"github.com/asheshgoplani/agent-deck/internal/vcsbackend"
-	"github.com/asheshgoplani/agent-deck/internal/web"
+	"github.com/RishabhKodes/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/vcs"
+	"github.com/RishabhKodes/agent-deck/internal/vcsbackend"
+	"github.com/RishabhKodes/agent-deck/internal/web"
 )
 
 // Compile-time check: WebMutator must implement web.SessionMutator.

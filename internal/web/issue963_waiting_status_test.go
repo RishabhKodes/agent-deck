@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestWebUI_RendersWaitingStatus_RegressionFor963 is the regression test for

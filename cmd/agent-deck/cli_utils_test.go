@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestNormalizeArgs(t *testing.T) {

@@ -1,6 +1,6 @@
 package session
 
-import "github.com/asheshgoplani/agent-deck/internal/tmux"
+import "github.com/RishabhKodes/agent-deck/internal/tmux"
 
 // SetTmuxSessionForTest assigns the unexported tmuxSession field. Tests in
 // other packages (notably internal/ui) need this to construct an Instance with

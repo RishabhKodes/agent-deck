@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/send"
+	"github.com/RishabhKodes/agent-deck/internal/send"
 )
 
 // neverReadyChecker simulates a busy agent that never reaches "waiting"/"idle".

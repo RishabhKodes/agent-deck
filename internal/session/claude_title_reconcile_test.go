@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // seedClaudeSession writes ~/.claude/sessions/<pid>.json under home with the

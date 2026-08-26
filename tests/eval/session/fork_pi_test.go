@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 func TestEval_SessionForkPi_RealBinary(t *testing.T) {

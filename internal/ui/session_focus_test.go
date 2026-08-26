@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // buildFocusHome returns a Home with two groups (alpha: a1,a2; beta: b1,b2) and

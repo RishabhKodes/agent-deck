@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/asheshgoplani/agent-deck/internal/costs"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 const costsUsage = "Usage: agent-deck costs <sync|summary|recompute>"

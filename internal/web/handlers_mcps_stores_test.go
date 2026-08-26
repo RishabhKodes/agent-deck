@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // Store-coherence tests for the production MCP manager.

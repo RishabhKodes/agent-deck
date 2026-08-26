@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 // TestEval_Session_SocketIsolation_RealTmux: the v1.7.50 feature guard.

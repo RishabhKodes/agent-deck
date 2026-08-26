@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 // PipeManager manages ControlPipes for all active tmux sessions.

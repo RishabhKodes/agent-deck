@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // mcpReapGracePeriod is how long we wait after SIGTERM before escalating

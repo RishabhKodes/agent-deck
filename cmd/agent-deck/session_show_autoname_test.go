@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // `session show --json` must surface the auto-name fields so the notification

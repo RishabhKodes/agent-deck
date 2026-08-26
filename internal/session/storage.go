@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 var storageLog = logging.ForComponent(logging.CompStorage)
@@ -298,6 +298,27 @@ func NewReadOnlyStorageWithProfile(profile string) (*Storage, error) {
 	db, err := statedb.OpenReadOnly(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open state database read-only: %w", err)
+	}
+	return &Storage{db: db, dbPath: dbPath, profile: effectiveProfile}, nil
+}
+
+// NewLiveReadOnlyStorageWithProfile opens the profile without migrations or
+// SQL write capability while still observing committed rows in an active WAL.
+// It is intended for continuously refreshing product surfaces such as the
+// workspace navigator. Use NewReadOnlyStorageWithProfile for byte-zero-effect
+// snapshots where ignoring concurrent WAL contents is acceptable.
+func NewLiveReadOnlyStorageWithProfile(profile string) (*Storage, error) {
+	effectiveProfile, err := ResolveProfileForStorage(profile)
+	if err != nil {
+		return nil, err
+	}
+	dbPath, err := GetDBPathForProfile(effectiveProfile)
+	if err != nil {
+		return nil, err
+	}
+	db, err := statedb.OpenLiveReadOnly(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open state database live read-only: %w", err)
 	}
 	return &Storage{db: db, dbPath: dbPath, profile: effectiveProfile}, nil
 }

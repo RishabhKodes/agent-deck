@@ -3,7 +3,7 @@ package web
 import (
 	"net/http"
 
-	"github.com/asheshgoplani/agent-deck/internal/sysinfo"
+	"github.com/RishabhKodes/agent-deck/internal/sysinfo"
 )
 
 func (s *Server) handleSystemStats(w http.ResponseWriter, r *http.Request) {

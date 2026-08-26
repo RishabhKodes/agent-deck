@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil/fakeclock"
+	"github.com/RishabhKodes/agent-deck/internal/testutil/fakeclock"
 )
 
 func TestNew_StartsAtSeed(t *testing.T) {

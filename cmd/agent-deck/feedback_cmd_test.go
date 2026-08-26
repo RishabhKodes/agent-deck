@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/feedback"
+	"github.com/RishabhKodes/agent-deck/internal/feedback"
 )
 
 // feedbackMocks wraps a *feedback.Sender plus counters so the test

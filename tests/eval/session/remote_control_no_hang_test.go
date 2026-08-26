@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 // TestEval_Session_StatusUnderBridgedStdio_NoHang is the user-observable

@@ -22,7 +22,7 @@ package session
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // Shell session with no tool-level session id still sweeps by

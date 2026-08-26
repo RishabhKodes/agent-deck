@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // ResolveSession is the CLI's identity lookup, and it exists at the merge base —

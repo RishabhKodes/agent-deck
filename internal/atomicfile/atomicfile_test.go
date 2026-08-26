@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/atomicfile"
+	"github.com/RishabhKodes/agent-deck/internal/atomicfile"
 )
 
 func TestWriteFile_NewFile(t *testing.T) {

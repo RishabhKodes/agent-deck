@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // resolveInitialTool: explicit config default wins over the remembered value.

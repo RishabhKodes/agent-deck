@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestB7_InboxDrainSelf_ResolvesFromInstanceEnv(t *testing.T) {

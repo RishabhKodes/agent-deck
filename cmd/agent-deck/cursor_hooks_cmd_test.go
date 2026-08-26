@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // setupCursorHooksTest sandboxes HOME to a fresh temp dir and clears the

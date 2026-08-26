@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/desknotify"
+	"github.com/RishabhKodes/agent-deck/internal/desknotify"
 )
 
 // recordingBackend captures notifications instead of raising a real banner.

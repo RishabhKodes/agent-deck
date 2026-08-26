@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
 )
 
 // TestMain ensures all UI tests use the _test profile to prevent

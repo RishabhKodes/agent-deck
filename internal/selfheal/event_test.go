@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 func TestNDJSONSink_AppendOnly_NeverTruncates(t *testing.T) {

@@ -19,13 +19,13 @@ import (
 
 	dark "github.com/thiagokokada/dark-mode-go"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
-	"github.com/asheshgoplani/agent-deck/internal/atomicfile"
-	"github.com/asheshgoplani/agent-deck/internal/git"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/platform"
-	"github.com/asheshgoplani/agent-deck/internal/safeio"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/atomicfile"
+	"github.com/RishabhKodes/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/platform"
+	"github.com/RishabhKodes/agent-deck/internal/safeio"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // UserConfigFileName is the TOML config file for user preferences
@@ -242,6 +242,9 @@ type UserConfig struct {
 	// Web defines `agent-deck web` HTTP server settings.
 	Web WebSettings `toml:"web,omitempty"`
 
+	// Workspace configures the opt-in two-pane native terminal workspace.
+	Workspace WorkspaceSettings `toml:"workspace,omitempty"`
+
 	// UI defines TUI layout settings (split ratios, etc).
 	UI UISettings `toml:"ui,omitempty"`
 
@@ -443,6 +446,33 @@ type UISettings struct {
 	// `add`/`session start` are unaffected by this flag — they attach only
 	// with an explicit `--attach`.
 	AttachOnCreate bool `toml:"attach_on_create,omitempty"`
+}
+
+// WorkspaceSettings controls the experimental native terminal workspace.
+type WorkspaceSettings struct {
+	// SidebarWidth is the navigator width in terminal columns. Values outside
+	// 24-60 are clamped; zero preserves the 32-column default.
+	SidebarWidth int `toml:"sidebar_width,omitzero"`
+}
+
+const (
+	DefaultWorkspaceSidebarWidth = 32
+	MinWorkspaceSidebarWidth     = 24
+	MaxWorkspaceSidebarWidth     = 60
+)
+
+// GetSidebarWidth returns the configured workspace navigator width.
+func (w WorkspaceSettings) GetSidebarWidth() int {
+	if w.SidebarWidth <= 0 {
+		return DefaultWorkspaceSidebarWidth
+	}
+	if w.SidebarWidth < MinWorkspaceSidebarWidth {
+		return MinWorkspaceSidebarWidth
+	}
+	if w.SidebarWidth > MaxWorkspaceSidebarWidth {
+		return MaxWorkspaceSidebarWidth
+	}
+	return w.SidebarWidth
 }
 
 // normalizeUIHiddenTools lowercases, dedupes, and drops unknown entries from
@@ -3327,7 +3357,7 @@ func SaveUserConfigWithIntent(config *UserConfig, allowSectionDrop bool) error {
 	if _, err := buf.WriteString("# Agent Deck Configuration\n"); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
-	if _, err := buf.WriteString("# All options: https://github.com/asheshgoplani/agent-deck/blob/main/skills/agent-deck/references/config-reference.md\n\n"); err != nil {
+	if _, err := buf.WriteString("# All options: https://github.com/RishabhKodes/agent-deck/blob/main/skills/agent-deck/references/config-reference.md\n\n"); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 
@@ -4304,6 +4334,15 @@ func GetTerminalSettings() TerminalSettings {
 		return TerminalSettings{}
 	}
 	return config.Terminal
+}
+
+// GetWorkspaceSettings returns native workspace layout settings.
+func GetWorkspaceSettings() WorkspaceSettings {
+	config, err := LoadUserConfig()
+	if err != nil || config == nil {
+		return WorkspaceSettings{}
+	}
+	return config.Workspace
 }
 
 // GetInstanceSettings returns instance behavior settings

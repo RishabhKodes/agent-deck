@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
-	"github.com/asheshgoplani/agent-deck/internal/tmuxutf8"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmuxutf8"
 )
 
 // TestPrepend_AddsFlagInGlobalPosition: `-u` is a GLOBAL tmux option. Placed

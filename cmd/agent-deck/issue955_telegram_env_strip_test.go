@@ -30,7 +30,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 const issue955TSDPath = "/fake/conductor/tsd"

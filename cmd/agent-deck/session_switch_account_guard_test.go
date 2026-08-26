@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // #1815 Guard 2: switch-account already produced the right diagnosis ("no

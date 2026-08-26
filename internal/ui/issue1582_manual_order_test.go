@@ -21,7 +21,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestShiftReorder_PersistsDuringReload_Issue1582(t *testing.T) {

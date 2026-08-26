@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // envVarFlags implements flag.Value for repeatable -env KEY=VALUE flags

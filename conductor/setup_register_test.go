@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// Regression test for https://github.com/asheshgoplani/agent-deck/issues/1854.
+// Regression test for https://github.com/RishabhKodes/agent-deck/issues/1854.
 //
 // conductor/setup.sh reported "Could not register <title> (add manually from
 // TUI)" for a session that was already registered and needed nothing done — an

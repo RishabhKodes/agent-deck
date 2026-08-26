@@ -5,8 +5,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/send"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/send"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // verifyPromptConsumedAfterLaunch observes whether claude actually consumed

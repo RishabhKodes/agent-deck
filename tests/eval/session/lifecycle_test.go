@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 // TestEval_Session_InjectStatusLine_RealTmux is the guard for RFC Bug 3

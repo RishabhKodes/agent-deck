@@ -10,9 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/asheshgoplani/agent-deck/internal/git"
-	"github.com/asheshgoplani/agent-deck/internal/jujutsu"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/jujutsu"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // forkFocusTarget identifies a focusable element in the fork dialog. The set of

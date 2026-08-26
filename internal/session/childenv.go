@@ -1,6 +1,6 @@
 package session
 
-import "github.com/asheshgoplani/agent-deck/internal/childenv"
+import "github.com/RishabhKodes/agent-deck/internal/childenv"
 
 // ChildLaunchEnv returns the environment for a child claude process,
 // guaranteed NOT to inherit the conductor's telegram pollution: every

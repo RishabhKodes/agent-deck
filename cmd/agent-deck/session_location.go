@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // This file is the CLI half of "a session's identity is WHERE IT RUNS".

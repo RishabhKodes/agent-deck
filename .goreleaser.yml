@@ -61,7 +61,7 @@ changelog:
 
 release:
   github:
-    owner: asheshgoplani
+    owner: RishabhKodes
     name: agent-deck
   # Assets are attached to a DRAFT and the release workflow publishes it only
   # after every expected tarball + checksums.txt is present and checksum-verified
@@ -91,24 +91,19 @@ release:
 
     ### Installation
 
-    **Homebrew (recommended):**
-    ```bash
-    brew install asheshgoplani/tap/agent-deck
-    ```
-
     **Quick Install:**
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/asheshgoplani/agent-deck/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/RishabhKodes/agent-deck/main/install.sh | bash
     ```
 
     **Go Install:**
     ```bash
-    go install github.com/asheshgoplani/agent-deck/cmd/agent-deck@v{{.Version}}
+    go install github.com/RishabhKodes/agent-deck/cmd/agent-deck@v{{.Version}}
     ```
   footer: |
     ---
 
-    **Full Changelog**: https://github.com/asheshgoplani/agent-deck/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/RishabhKodes/agent-deck/compare/{{ .PreviousTag }}...{{ .Tag }}
 
 # Homebrew tap. GoReleaser only GENERATES the formula here — it never pushes it.
 # The push lives in .github/workflows/release.yml ("Update Homebrew tap formula"),
@@ -155,7 +150,7 @@ brews:
     # critical path and re-opens #1760.
     skip_upload: true
     repository:
-      owner: asheshgoplani
+      owner: RishabhKodes
       name: homebrew-tap
       # No `token` on purpose. With skip_upload: true GoReleaser never talks to
       # the tap, so it needs no tap credentials — which also means
@@ -163,7 +158,7 @@ brews:
       # template referencing an unset .Env key can no longer fail the config.
       # The secret is used only by release.yml's post-publish push step.
     directory: Formula
-    homepage: "https://github.com/asheshgoplani/agent-deck"
+    homepage: "https://github.com/RishabhKodes/agent-deck"
     description: "Terminal session manager for AI coding agents"
     license: "MIT"
     dependencies:

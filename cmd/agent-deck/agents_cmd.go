@@ -11,8 +11,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/asheshgoplani/agent-deck/internal/agents"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/agents"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // handleAgents implements `agent-deck agents`: the grouped-by-machine fleet

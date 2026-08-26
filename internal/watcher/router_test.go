@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/watcher"
+	"github.com/RishabhKodes/agent-deck/internal/watcher"
 )
 
 // buildClients creates a standard test client map with exact and wildcard entries.

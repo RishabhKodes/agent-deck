@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // TestKillInternal_DiscoversAndReapsMcpChildrenFromPaneTree proves

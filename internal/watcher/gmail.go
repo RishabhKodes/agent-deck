@@ -42,7 +42,7 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // OAuth scopes are hard-coded Go constants, NEVER read from AdapterConfig.Settings

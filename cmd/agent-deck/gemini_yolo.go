@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func applyCLIYoloOverride(inst *session.Instance, enabled bool) error {

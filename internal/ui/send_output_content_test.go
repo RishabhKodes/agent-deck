@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // setupClaudeConfigWithTwoJSONLs writes two JSONL files (stale + fresh) into

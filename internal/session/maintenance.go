@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/docker"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/docker"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 var maintLog = logging.ForComponent(logging.CompSession)

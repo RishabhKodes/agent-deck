@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/asheshgoplani/agent-deck/internal/vcs"
+	"github.com/RishabhKodes/agent-deck/internal/vcs"
 )
 
 type worktreeCleanupLock struct{ file *os.File }

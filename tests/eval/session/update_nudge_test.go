@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 // TestEval_VersionFlag_ShowsUpdateAnnotationFromCache seeds the scratch

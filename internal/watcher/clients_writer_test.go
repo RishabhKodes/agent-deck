@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/watcher"
+	"github.com/RishabhKodes/agent-deck/internal/watcher"
 )
 
 // makeEntry returns a simple ClientEntry for testing.

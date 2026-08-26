@@ -1,0 +1,138 @@
+package workspace
+
+import (
+	"context"
+	"os/exec"
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/RishabhKodes/agent-deck/internal/session"
+)
+
+type fakePaneController struct {
+	shown     []string
+	activated []string
+	detached  int
+	zooms     []bool
+}
+
+func (f *fakePaneController) ShowInstance(_ context.Context, id string) error {
+	f.shown = append(f.shown, id)
+	return nil
+}
+
+func (f *fakePaneController) ActivateInstance(_ context.Context, id string) error {
+	f.activated = append(f.activated, id)
+	return nil
+}
+
+func (f *fakePaneController) FocusAgent(context.Context) error { return nil }
+func (f *fakePaneController) Detach(context.Context) error {
+	f.detached++
+	return nil
+}
+func (f *fakePaneController) ManagerCommand() *exec.Cmd { return exec.Command("true") }
+func (f *fakePaneController) ClassicAttachCommand(string) *exec.Cmd {
+	return exec.Command("true")
+}
+func (f *fakePaneController) SetZoom(_ context.Context, zoom bool) error {
+	f.zooms = append(f.zooms, zoom)
+	return nil
+}
+
+func testSidebarItems() []sidebarItem {
+	instances := []*session.InstanceData{
+		{ID: "a", Title: "Alpha", Tool: "codex", Status: session.StatusRunning, ProjectPath: "/work/alpha", TmuxSession: "agentdeck_a"},
+		{ID: "b", Title: "Beta", Tool: "claude", Status: session.StatusWaiting, ProjectPath: "/work/beta", TmuxSession: "agentdeck_b"},
+		{ID: "c", Title: "Gamma", Tool: "shell", Status: session.StatusStopped, ProjectPath: "/work/gamma"},
+	}
+	items := make([]sidebarItem, 0, len(instances))
+	for _, inst := range instances {
+		items = append(items, sidebarItem{data: inst, attachKey: attachKey(inst)})
+	}
+	return items
+}
+
+func TestSidebarStaleSwitchCannotOverrideLatestHighlight(t *testing.T) {
+	controller := &fakePaneController{}
+	model := newSidebarModel("default", controller, testSidebarItems())
+	model.generation = 2
+
+	_, staleCmd := model.Update(switchRequestMsg{generation: 1, instanceID: "b", attachKey: "old"})
+	if staleCmd != nil {
+		t.Fatal("stale generation produced a switch command")
+	}
+	_, latestCmd := model.Update(switchRequestMsg{generation: 2, instanceID: "c", attachKey: "new"})
+	if latestCmd == nil {
+		t.Fatal("latest generation did not produce a switch command")
+	}
+	finished := latestCmd()
+	model.Update(finished)
+	if got := strings.Join(controller.shown, ","); got != "c" {
+		t.Fatalf("viewer switches = %q, want c", got)
+	}
+}
+
+func TestSidebarEnterAtomicallyActivatesHighlightedSession(t *testing.T) {
+	controller := &fakePaneController{}
+	model := newSidebarModel("default", controller, testSidebarItems())
+	model.cursor = 1
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("Enter did not produce an activation command")
+	}
+	model.Update(cmd())
+	if got := strings.Join(controller.activated, ","); got != "b" {
+		t.Fatalf("activated = %q, want b", got)
+	}
+	if len(controller.shown) != 0 {
+		t.Fatalf("Enter used non-atomic highlight path: %v", controller.shown)
+	}
+}
+
+func TestSidebarStatusChangesDoNotReconnectNativeClient(t *testing.T) {
+	inst := &session.InstanceData{ID: "a", TmuxSession: "agentdeck_a", Status: session.StatusRunning}
+	before := attachKey(inst)
+	inst.Status = session.StatusWaiting
+	if after := attachKey(inst); after != before {
+		t.Fatalf("status-only change altered attach key: %q != %q", after, before)
+	}
+	inst.TmuxSession = "agentdeck_a_restarted"
+	if after := attachKey(inst); after == before {
+		t.Fatal("tmux restart did not alter attach key")
+	}
+}
+
+func TestSidebarRendersAtPlannedWidthWithSeparateMarkers(t *testing.T) {
+	controller := &fakePaneController{}
+	model := newSidebarModel("default", controller, testSidebarItems())
+	model.width = 32
+	model.height = 18
+	model.cursor = 1
+	model.activeID = "a"
+	view := model.View()
+	if strings.Contains(view, "Terminal too small") {
+		t.Fatal("workspace sidebar rejected its default width")
+	}
+	if !strings.Contains(view, "Alpha") || !strings.Contains(view, "Beta") {
+		t.Fatalf("expected sessions missing from view:\n%s", view)
+	}
+	if !strings.Contains(view, "●") || !strings.Contains(view, "›") {
+		t.Fatalf("active/cursor markers are not separate:\n%s", view)
+	}
+}
+
+func TestSidebarQDetachesWithoutQuittingModel(t *testing.T) {
+	controller := &fakePaneController{}
+	model := newSidebarModel("default", controller, testSidebarItems())
+	returned, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if returned == nil || cmd == nil {
+		t.Fatal("q should keep the sidebar model alive and issue detach")
+	}
+	model.Update(cmd())
+	if controller.detached != 1 {
+		t.Fatalf("detach count = %d, want 1", controller.detached)
+	}
+}

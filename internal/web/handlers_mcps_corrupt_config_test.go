@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/safeio"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/safeio"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // Data-loss guard: a config that could not be READ must never be replaced by

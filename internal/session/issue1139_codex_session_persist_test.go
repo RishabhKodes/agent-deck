@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // Regression for issue #1139 — Codex variant of the persist gap fixed

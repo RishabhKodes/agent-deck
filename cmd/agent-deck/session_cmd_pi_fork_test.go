@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/git"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestSessionFork_PiUsesNativeForkBeforeStart(t *testing.T) {

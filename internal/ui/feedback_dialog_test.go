@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/feedback"
+	"github.com/RishabhKodes/agent-deck/internal/feedback"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -275,7 +275,7 @@ func TestFeedbackDialog_ConfirmView_ContainsDisclosure(t *testing.T) {
 
 	mustContain := []string{
 		"PUBLICLY",
-		"https://github.com/asheshgoplani/agent-deck/discussions/600",
+		"https://github.com/RishabhKodes/agent-deck/discussions/600",
 		"@testuser",
 		"scrollback fix",
 		"1.7.37",

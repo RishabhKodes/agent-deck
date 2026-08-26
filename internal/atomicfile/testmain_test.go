@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
 )
 
 // TestMain holds only the os.Exit call. The setup+defers live in runTestMain so

@@ -7,8 +7,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/ui"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/ui"
 )
 
 func TestTmuxAvailable(t *testing.T) {

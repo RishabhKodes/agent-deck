@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // versionCheckInterval is how often the always-on daemon re-reads the on-disk

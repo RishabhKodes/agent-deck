@@ -37,7 +37,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // handleTelegramDoctor is the entry point dispatched from main.go.

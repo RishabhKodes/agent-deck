@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/shellwords"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/shellwords"
 )
 
 // Registry is the unified, in-memory view of every tool agent-deck knows about:

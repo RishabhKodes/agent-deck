@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // cleanupDefaultDays is the default age threshold for `session cleanup`: a

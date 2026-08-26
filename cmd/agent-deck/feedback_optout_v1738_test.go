@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/feedback"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/feedback"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // isolateFeedbackHome points HOME at a tempdir so feedback state and user

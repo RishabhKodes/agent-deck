@@ -3,7 +3,7 @@ package costs_test
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
 )
 
 func TestCostPoller_Dedup(t *testing.T) {

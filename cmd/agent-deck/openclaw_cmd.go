@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/docker"
-	"github.com/asheshgoplani/agent-deck/internal/openclaw"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/docker"
+	"github.com/RishabhKodes/agent-deck/internal/openclaw"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // handleOpenClaw dispatches openclaw subcommands.

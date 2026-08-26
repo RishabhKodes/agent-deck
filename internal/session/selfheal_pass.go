@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/selfheal"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/selfheal"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // selfHealRegistry holds one observe-only self-heal Engine per profile, lazily

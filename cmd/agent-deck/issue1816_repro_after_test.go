@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/fleet"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/fleet"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // REPRODUCTION for #1816, the AFTER half.

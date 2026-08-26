@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
 )
 
 // TestMain isolates HOME+XDG and the tmux socket for this package so spawning

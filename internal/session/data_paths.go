@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
 )
 
 func dataPath(name string, markers ...string) (string, error) {

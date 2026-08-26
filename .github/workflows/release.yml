@@ -2,7 +2,7 @@
 # Replaces the manual `make release-local` step that was previously
 # required after tagging, preventing empty releases (see #332).
 
-name: Release
+name: Release (disabled in independent fork)
 
 on:
   push:
@@ -36,6 +36,7 @@ permissions:
 
 jobs:
   release:
+    if: ${{ false }} # Enable only after a fork-owned release channel is configured.
     runs-on: ubuntu-latest
     timeout-minutes: 90
     # Tag-push runs use the pushed tag; manual dispatch supplies it explicitly.

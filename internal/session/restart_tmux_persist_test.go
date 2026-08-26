@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // restartPersistFixture opens real storage on its own profile, registers it as

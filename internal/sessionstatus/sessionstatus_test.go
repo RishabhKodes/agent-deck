@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/sessionstatus"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/sessionstatus"
 )
 
 // fixedNow is the anchor used for every test in this file. Tests express hook

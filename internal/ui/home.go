@@ -29,28 +29,28 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
-	"github.com/asheshgoplani/agent-deck/internal/agents"
-	"github.com/asheshgoplani/agent-deck/internal/clipboard"
-	"github.com/asheshgoplani/agent-deck/internal/costs"
-	"github.com/asheshgoplani/agent-deck/internal/docker"
-	"github.com/asheshgoplani/agent-deck/internal/feedback"
-	"github.com/asheshgoplani/agent-deck/internal/git"
-	"github.com/asheshgoplani/agent-deck/internal/intervalhook"
-	"github.com/asheshgoplani/agent-deck/internal/jujutsu"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/safego"
-	"github.com/asheshgoplani/agent-deck/internal/send"
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/sysinfo"
-	"github.com/asheshgoplani/agent-deck/internal/terminal"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
-	"github.com/asheshgoplani/agent-deck/internal/update"
-	"github.com/asheshgoplani/agent-deck/internal/vcs"
-	"github.com/asheshgoplani/agent-deck/internal/vcsbackend"
-	"github.com/asheshgoplani/agent-deck/internal/watcher"
-	"github.com/asheshgoplani/agent-deck/internal/web"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/agents"
+	"github.com/RishabhKodes/agent-deck/internal/clipboard"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/docker"
+	"github.com/RishabhKodes/agent-deck/internal/feedback"
+	"github.com/RishabhKodes/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/intervalhook"
+	"github.com/RishabhKodes/agent-deck/internal/jujutsu"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/safego"
+	"github.com/RishabhKodes/agent-deck/internal/send"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/sysinfo"
+	"github.com/RishabhKodes/agent-deck/internal/terminal"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/update"
+	"github.com/RishabhKodes/agent-deck/internal/vcs"
+	"github.com/RishabhKodes/agent-deck/internal/vcsbackend"
+	"github.com/RishabhKodes/agent-deck/internal/watcher"
+	"github.com/RishabhKodes/agent-deck/internal/web"
 )
 
 // Version is set by main.go for update checking
@@ -11615,7 +11615,7 @@ func (h *Home) saveInstancesWithForce(force bool) {
 			// Without this, subsequent saves incorrectly detect the TUI's own previous
 			// save as an "external change" (currentMtime > stale lastLoadMtime) and abort.
 			// This caused session renames and other non-force saves to silently fail.
-			// See: https://github.com/asheshgoplani/agent-deck/issues/141
+			// See: https://github.com/RishabhKodes/agent-deck/issues/141
 			if newMtime, err := h.storage.GetFileMtime(); err == nil && !newMtime.IsZero() {
 				h.reloadMu.Lock()
 				h.lastLoadMtime = newMtime

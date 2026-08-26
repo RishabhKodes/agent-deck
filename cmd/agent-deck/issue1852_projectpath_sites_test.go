@@ -3,10 +3,10 @@ package main
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
-// Regression tests for https://github.com/asheshgoplani/agent-deck/issues/1852.
+// Regression tests for https://github.com/RishabhKodes/agent-deck/issues/1852.
 //
 // Five sites identified a session by comparing Instance.ProjectPath, which for
 // an --ssh session is only a local placeholder defaulting to the controller's

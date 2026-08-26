@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestChildrenOfFiltersByParent(t *testing.T) {

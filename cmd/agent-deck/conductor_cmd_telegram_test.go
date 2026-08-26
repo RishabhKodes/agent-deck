@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // CLI-level telegram topology tests (fix v1.7.22, Closes #658).

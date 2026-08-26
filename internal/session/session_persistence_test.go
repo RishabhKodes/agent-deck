@@ -60,7 +60,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // uniqueTmuxServerName returns a tmux server name with the mandatory
@@ -1463,7 +1463,7 @@ func TestPersistence_DiscoverLatestClaudeJSONL_Unit(t *testing.T) {
 // TestEnsureClaudeSessionIDFromDisk_NewSessionSkipsDiscovery verifies that a
 // brand-new session (ClaudeDetectedAt is zero) does NOT inherit another
 // session's JSONL via disk discovery. This is the regression test for
-// https://github.com/asheshgoplani/agent-deck/issues/608
+// https://github.com/RishabhKodes/agent-deck/issues/608
 //
 // Scenario: directory already has a JSONL from session A. User creates session
 // B in the same directory. Session B should start fresh, not resume A's

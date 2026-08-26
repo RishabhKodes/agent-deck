@@ -12,7 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/asheshgoplani/agent-deck/internal/watcher"
+	"github.com/RishabhKodes/agent-deck/internal/watcher"
 )
 
 func TestParseChannelsJSON_Valid(t *testing.T) {

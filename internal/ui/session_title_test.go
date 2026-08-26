@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestDisplaySessionTitle pins the substitution rule for auto-named sessions:

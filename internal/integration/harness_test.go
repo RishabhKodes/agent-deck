@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // nonAlphanumRE matches characters that are not alphanumeric or dash.

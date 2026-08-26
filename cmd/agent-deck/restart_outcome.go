@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // adoptStateDB registers this command's storage handle as the process-wide

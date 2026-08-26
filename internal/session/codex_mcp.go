@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/asheshgoplani/agent-deck/internal/atomicfile"
+	"github.com/RishabhKodes/agent-deck/internal/atomicfile"
 )
 
 // codexMCPServer is the [mcp_servers.NAME] shape in $CODEX_HOME/config.toml.

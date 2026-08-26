@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/watcher"
+	"github.com/RishabhKodes/agent-deck/internal/watcher"
 )
 
 // TestListenForWatcherEvent_DeliversMsg verifies that listenForWatcherEvent's

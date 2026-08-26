@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/update"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/update"
 )
 
 func handleRemote(profile string, args []string) {

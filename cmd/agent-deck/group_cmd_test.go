@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // helper: create storage, add N root groups, return (storage, instances, groupTree).

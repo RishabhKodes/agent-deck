@@ -1,27 +1,40 @@
 package feedback
 
 import (
+	"errors"
+	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/clipboard"
-	"github.com/asheshgoplani/agent-deck/internal/platform"
+	"github.com/RishabhKodes/agent-deck/internal/clipboard"
+	"github.com/RishabhKodes/agent-deck/internal/platform"
 )
 
-// DiscussionNodeID is the GitHub Discussion node ID for the Feedback Hub.
-// Must be replaced with the real node ID before release.
-// Retrieve after creating the Discussion at:
-//
-//	https://github.com/asheshgoplani/agent-deck/discussions
-//
-// via: gh api graphql -f query='{ repository(owner:"asheshgoplani",name:"agent-deck") { discussions(first:5) { nodes { id title } } } }'
-const DiscussionNodeID = "D_kwDOQh82-s4Alt9V"
+// DiscussionNodeID deliberately cannot resolve. The independent fork has no
+// feedback Discussion, and must never post through the inherited upstream ID.
+const DiscussionNodeID = "D_DISABLED_INDEPENDENT_FORK"
+
+const DisableSubmissionEnv = "AGENTDECK_DISABLE_FEEDBACK"
+
+var ErrSubmissionDisabled = errors.New("feedback submission is disabled in this independent fork")
+
+// IsSubmissionEnabled is false in fork builds, whose main entrypoint exports
+// DisableSubmissionEnv before either the CLI or TUI can initialize feedback.
+func IsSubmissionEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(DisableSubmissionEnv))) {
+	case "1", "true", "yes", "on":
+		return false
+	default:
+		return true
+	}
+}
 
 // DiscussionURL is the GitHub Discussions page for agent-deck feedback.
 // Note: GitHub Discussions does NOT support ?body= URL parameter prefill
 // (only GitHub Issues supports this). The browser fallback opens this URL
 // and relies on the user pasting from clipboard into the Discussion form.
-const DiscussionURL = "https://github.com/asheshgoplani/agent-deck/discussions"
+const DiscussionURL = "https://github.com/RishabhKodes/agent-deck/discussions"
 
 // Sender holds the three-tier send mechanism for feedback submissions.
 // All four function fields are injectable for testing.
@@ -48,6 +61,9 @@ type Sender struct {
 func NewSender() *Sender {
 	return &Sender{
 		GhCmd: func(args ...string) error {
+			if !IsSubmissionEnabled() {
+				return ErrSubmissionDisabled
+			}
 			_, err := exec.Command("gh", args...).CombinedOutput()
 			return err
 		},

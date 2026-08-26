@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // remoteSessionsCacheKey is the meta-table key holding the last-known remote

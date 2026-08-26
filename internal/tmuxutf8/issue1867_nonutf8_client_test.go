@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // spinnerGlyph is U+280B BRAILLE PATTERN DOTS-1-2-4 (bytes e2 a0 8b), one of

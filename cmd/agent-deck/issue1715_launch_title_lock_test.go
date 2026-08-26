@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestHandleLaunch_LocksExplicitTitle: the launch path must route the lock

@@ -19,9 +19,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/costs"
-	"github.com/asheshgoplani/agent-deck/internal/termreply"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/termreply"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 	"github.com/creack/pty"
 	"golang.org/x/term"
 )

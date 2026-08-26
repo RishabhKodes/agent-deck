@@ -3,7 +3,7 @@ package tmux
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/termreply"
+	"github.com/RishabhKodes/agent-deck/internal/termreply"
 )
 
 func TestIndexSwitchKey_Disabled(t *testing.T) {

@@ -1,4 +1,4 @@
-name: PR Notification
+name: PR Notification (disabled in independent fork)
 
 on:
   pull_request_target:
@@ -8,7 +8,7 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     # Skip draft PRs unless they become ready
-    if: github.event.pull_request.draft == false
+    if: ${{ false }} # Do not call the inherited ntfy topic.
     steps:
       - name: Gather PR context
         id: context

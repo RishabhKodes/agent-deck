@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 // TestEval_SelectFlag_GroupScopeWarning asserts that `-g <group> --select <id>`

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func archivedAt() time.Time { return time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC) }

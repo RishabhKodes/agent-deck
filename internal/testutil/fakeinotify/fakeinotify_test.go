@@ -6,7 +6,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil/fakeinotify"
+	"github.com/RishabhKodes/agent-deck/internal/testutil/fakeinotify"
 )
 
 func TestPublish_DeliversEvent(t *testing.T) {

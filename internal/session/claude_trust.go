@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/atomicfile"
+	"github.com/RishabhKodes/agent-deck/internal/atomicfile"
 )
 
 // PreAcceptClaudeTrust adds a `projects[parentDir].hasTrustDialogAccepted = true`

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 // commsLog is the shared logger for the issue #1225 durable-comms paths

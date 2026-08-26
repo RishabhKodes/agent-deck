@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/platform"
+	"github.com/RishabhKodes/agent-deck/internal/platform"
 )
 
 const (

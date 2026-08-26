@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

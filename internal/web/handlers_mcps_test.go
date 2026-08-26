@@ -15,7 +15,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // fakeMCPManager records every call and supports per-method injectable errors.

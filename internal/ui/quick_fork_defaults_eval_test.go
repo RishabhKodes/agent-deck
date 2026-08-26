@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestEval_ForkDialog_BuiltInDefaultsVisibleOnOpen proves that, with NO

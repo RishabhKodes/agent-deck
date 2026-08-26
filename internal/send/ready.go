@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // DefaultAgentReadyTimeout is the readiness budget for launch / StartWithMessage.

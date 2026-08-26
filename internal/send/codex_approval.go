@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // CodexApprovalTarget is the minimum tmux surface needed to safely resolve a

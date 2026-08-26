@@ -3,7 +3,7 @@ package selfheal
 import (
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // Candidate is a pure snapshot of one session's self-heal-relevant state for a

@@ -15,7 +15,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // leadDisplayWidth returns the display width of the text before the first

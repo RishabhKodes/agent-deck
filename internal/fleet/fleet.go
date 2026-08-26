@@ -41,7 +41,7 @@ package fleet
 import (
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // Health is a recovery-oriented liveness classification for one session.

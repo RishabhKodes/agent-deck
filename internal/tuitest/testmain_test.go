@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
 )
 
 // TestMain ensures all tuitest smoke tests use the _test profile to prevent

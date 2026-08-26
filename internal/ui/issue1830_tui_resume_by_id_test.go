@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestIssue1830_TUICreateResumeByIDVouchesOwnership pins a review finding on

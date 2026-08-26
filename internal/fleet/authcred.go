@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // Credential-identity grouping for auth-held sessions (#1816).

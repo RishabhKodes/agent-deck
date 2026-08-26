@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // handleInbox is the dispatch entry for `agent-deck inbox <session-id>`. It

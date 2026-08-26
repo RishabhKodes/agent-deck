@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/asheshgoplani/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/git"
 )
 
 // formatSetupWarning must produce a single bounded, sanitized footer line so a

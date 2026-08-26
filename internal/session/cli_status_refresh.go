@@ -1,6 +1,6 @@
 package session
 
-import "github.com/asheshgoplani/agent-deck/internal/tmux"
+import "github.com/RishabhKodes/agent-deck/internal/tmux"
 
 // RefreshInstancesForCLIStatus is the CLI analogue of
 // SessionDataService.refreshStatuses (internal/web) and

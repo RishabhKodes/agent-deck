@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // buildRemoteFlatItems renders a single remote's sessions as a nested

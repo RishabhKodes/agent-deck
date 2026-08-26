@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/ui"
-	"github.com/asheshgoplani/agent-deck/internal/web"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/ui"
+	"github.com/RishabhKodes/agent-deck/internal/web"
 )
 
 // noopMutator implements web.SessionMutator with stubs that never run. It's

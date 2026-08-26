@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/experiments"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/experiments"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // handleTry handles the 'try' subcommand for quick experiments

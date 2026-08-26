@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/asheshgoplani/agent-deck/internal/atomicfile"
+	"github.com/RishabhKodes/agent-deck/internal/atomicfile"
 )
 
 // GeminiMCPConfig represents settings.json structure

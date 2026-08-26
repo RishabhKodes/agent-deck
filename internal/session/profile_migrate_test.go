@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // migrateTestSetup pins HOME to a temp dir and pre-creates the named profiles

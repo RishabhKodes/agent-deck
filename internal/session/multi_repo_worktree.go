@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/git"
 )
 
 type MultiRepoWorktreeResult struct {

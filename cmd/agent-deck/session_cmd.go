@@ -15,15 +15,15 @@ import (
 
 	"al.essio.dev/pkg/shellescape"
 
-	"github.com/asheshgoplani/agent-deck/internal/clipboard"
-	"github.com/asheshgoplani/agent-deck/internal/git"
-	"github.com/asheshgoplani/agent-deck/internal/jujutsu"
-	"github.com/asheshgoplani/agent-deck/internal/send"
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
-	"github.com/asheshgoplani/agent-deck/internal/ui"
-	"github.com/asheshgoplani/agent-deck/internal/vcs"
+	"github.com/RishabhKodes/agent-deck/internal/clipboard"
+	"github.com/RishabhKodes/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/jujutsu"
+	"github.com/RishabhKodes/agent-deck/internal/send"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/ui"
+	"github.com/RishabhKodes/agent-deck/internal/vcs"
 )
 
 // handleSession dispatches session subcommands

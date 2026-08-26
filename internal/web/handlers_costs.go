@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 func (s *Server) handleCostsSummary(w http.ResponseWriter, r *http.Request) {

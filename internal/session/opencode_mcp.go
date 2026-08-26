@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/atomicfile"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/atomicfile"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 // opencodeMCPServer represents one server entry in opencode.json under "mcp".

@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/send"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/send"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // handleSessionApprove resolves one visibly active Codex approval overlay with

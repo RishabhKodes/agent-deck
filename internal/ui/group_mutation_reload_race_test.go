@@ -20,7 +20,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestGroupCreate_SurvivesReloadRace(t *testing.T) {

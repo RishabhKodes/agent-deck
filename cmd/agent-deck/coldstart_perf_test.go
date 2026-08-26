@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 // Cold-start regression tests for the agent-deck CLI.

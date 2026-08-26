@@ -13,7 +13,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/update"
+	"github.com/RishabhKodes/agent-deck/internal/update"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // TestSyncSessionIDsFromTmux_Claude verifies that a CLAUDE_SESSION_ID in the tmux

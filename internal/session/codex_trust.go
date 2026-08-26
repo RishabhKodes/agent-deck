@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/asheshgoplani/agent-deck/internal/atomicfile"
-	"github.com/asheshgoplani/agent-deck/internal/docker"
+	"github.com/RishabhKodes/agent-deck/internal/atomicfile"
+	"github.com/RishabhKodes/agent-deck/internal/docker"
 )
 
 const codexTrustLevelTrusted = "trusted"

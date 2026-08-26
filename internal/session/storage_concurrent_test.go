@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

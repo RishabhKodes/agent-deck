@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil/teatesthelper"
+	"github.com/RishabhKodes/agent-deck/internal/testutil/teatesthelper"
 )
 
 // dummyModel is a minimal tea.Model whose Update reacts to runes by

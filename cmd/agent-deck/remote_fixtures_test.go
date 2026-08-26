@@ -1,6 +1,6 @@
 package main
 
-import "github.com/asheshgoplani/agent-deck/internal/session"
+import "github.com/RishabhKodes/agent-deck/internal/session"
 
 // Shared fixtures for the --ssh identity tests. Deliberately free of any symbol
 // this epic introduces, so the test files that only use pre-existing API still

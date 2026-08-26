@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/integration"
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/testutil/logassert"
+	"github.com/RishabhKodes/agent-deck/internal/integration"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/testutil/logassert"
 )
 
 // newTestRunner builds a Runner with an injected loader (no config.toml I/O),

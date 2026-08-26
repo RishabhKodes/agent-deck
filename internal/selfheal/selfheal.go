@@ -21,7 +21,7 @@ package selfheal
 import (
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // Mode is the global self-heal authority level (config [selfheal] mode).

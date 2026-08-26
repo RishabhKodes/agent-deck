@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/safeio"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/safeio"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // SpawnFailureRecord captures why a session's initial process died at or shortly

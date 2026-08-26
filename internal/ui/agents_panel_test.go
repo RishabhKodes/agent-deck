@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/asheshgoplani/agent-deck/internal/agents"
+	"github.com/RishabhKodes/agent-deck/internal/agents"
 )
 
 // A Home built directly by a test (rather than through NewHome) leaves

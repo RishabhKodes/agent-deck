@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/goleak"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
 )
 
 // TestMain wraps the watcher package tests with goleak verification.

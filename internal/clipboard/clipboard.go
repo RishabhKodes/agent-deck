@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/platform"
+	"github.com/RishabhKodes/agent-deck/internal/platform"
 )
 
 // CopyResult contains metadata about a successful clipboard copy operation.

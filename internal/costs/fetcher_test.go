@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
 )
 
 func TestFetcherCacheAge_Missing(t *testing.T) {

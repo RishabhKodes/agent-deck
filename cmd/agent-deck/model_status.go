@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func applyCLIModelOverride(inst *session.Instance, modelID string) error {

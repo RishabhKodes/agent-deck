@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // Conductor turn-start context (the "fleet snapshot" hook). At the Claude

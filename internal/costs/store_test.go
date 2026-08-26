@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/costs"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 func testStore(t *testing.T) *costs.Store {

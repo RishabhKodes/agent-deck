@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func effectiveUserConfigPathForHelp() string {

@@ -9,9 +9,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/git"
-	"github.com/asheshgoplani/agent-deck/internal/jujutsu"
-	"github.com/asheshgoplani/agent-deck/internal/vcs"
+	"github.com/RishabhKodes/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/jujutsu"
+	"github.com/RishabhKodes/agent-deck/internal/vcs"
 )
 
 // gitBackend is a thin adapter that satisfies vcs.Backend by wrapping the

@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestIssue666_ResolveNewSessionGroup_CursorOnWindow_FallsBackToDefault

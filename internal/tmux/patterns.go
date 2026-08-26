@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 var patternLog = logging.ForComponent(logging.CompStatus)

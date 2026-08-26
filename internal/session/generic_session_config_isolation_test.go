@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
 )
 
 // isolateConfigRoots sets HOME + full XDG base dirs under a temp tree and

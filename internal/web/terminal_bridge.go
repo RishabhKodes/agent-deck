@@ -15,7 +15,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmuxutf8"
+	"github.com/RishabhKodes/agent-deck/internal/tmuxutf8"
 )
 
 var ErrTmuxSessionNotFound = errors.New("tmux session not found")

@@ -1,6 +1,6 @@
 package main
 
-import "github.com/asheshgoplani/agent-deck/internal/session"
+import "github.com/RishabhKodes/agent-deck/internal/session"
 
 func restartAllSessionRecords(results map[string]map[string]interface{}, attempts []session.BootAttempt) []map[string]interface{} {
 	ordered := make([]map[string]interface{}, 0, len(attempts))

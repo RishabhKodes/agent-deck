@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestIssue953_StoppedSessions_NotCountedAsErrors_Local(t *testing.T) {

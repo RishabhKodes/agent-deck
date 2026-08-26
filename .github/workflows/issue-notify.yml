@@ -1,4 +1,4 @@
-name: Issue Notification
+name: Issue Notification (disabled in independent fork)
 
 on:
   issues:
@@ -6,6 +6,7 @@ on:
 
 jobs:
   notify:
+    if: ${{ false }} # Do not call the inherited ntfy topic.
     runs-on: ubuntu-latest
     steps:
       - name: Gather issue context

@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestIssue1112_RemoteFetchMsg_InvalidatesStatusCounterCache reproduces the

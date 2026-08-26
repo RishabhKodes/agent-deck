@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/safeio"
+	"github.com/RishabhKodes/agent-deck/internal/safeio"
 	"github.com/google/uuid"
 
 	_ "modernc.org/sqlite"
@@ -370,6 +370,28 @@ func OpenReadOnly(dbPath string) (*StateDB, error) {
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("statedb: open read-only: %w", err)
+	}
+	pid := os.Getpid()
+	return &StateDB{db: db, pid: pid, path: dbPath, token: newOwnerToken(pid), readOnly: true}, nil
+}
+
+// OpenLiveReadOnly opens an existing database for a live product surface that
+// must observe committed rows still resident in SQLite's WAL. Unlike
+// OpenReadOnly, it deliberately omits immutable=1 because immutable databases
+// ignore WAL contents. mode=ro and query_only keep SQL writes disabled; schema
+// migration and checkpointing remain the writer's responsibility.
+func OpenLiveReadOnly(dbPath string) (*StateDB, error) {
+	if _, err := os.Stat(dbPath); err != nil {
+		return nil, err
+	}
+	dsn := "file:" + dbPath + "?mode=ro&_pragma=query_only(1)&_pragma=busy_timeout(5000)"
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("statedb: open live read-only: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("statedb: open live read-only: %w", err)
 	}
 	pid := os.Getpid()
 	return &StateDB{db: db, pid: pid, path: dbPath, token: newOwnerToken(pid), readOnly: true}, nil

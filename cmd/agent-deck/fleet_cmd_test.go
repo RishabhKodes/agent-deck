@@ -6,8 +6,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/asheshgoplani/agent-deck/internal/fleet"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/fleet"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func fleetTestCandidate(title, group string, st session.Status) fleet.Candidate {

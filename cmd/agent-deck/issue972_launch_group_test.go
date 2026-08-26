@@ -3,7 +3,7 @@ package main
 import "testing"
 
 // TestLaunch_DerivesGroupFromCwdNotParent_RegressionFor972 pins the fix for
-// https://github.com/asheshgoplani/agent-deck/issues/972.
+// https://github.com/RishabhKodes/agent-deck/issues/972.
 //
 // Bug: `agent-deck launch <project-path>` from inside a conductor session
 // (whose own group is `conductor`) inherited the parent's group instead of

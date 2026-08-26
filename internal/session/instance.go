@@ -30,12 +30,12 @@ import (
 	"al.essio.dev/pkg/shellescape"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/asheshgoplani/agent-deck/internal/docker"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/procfd"
-	"github.com/asheshgoplani/agent-deck/internal/send"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/docker"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/procfd"
+	"github.com/RishabhKodes/agent-deck/internal/send"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 var (
@@ -4603,7 +4603,7 @@ func (i *Instance) ensureClaudeSessionIDFromDisk() {
 	if i.ClaudeSessionID != "" {
 		return
 	}
-	// Fix for https://github.com/asheshgoplani/agent-deck/issues/608:
+	// Fix for https://github.com/RishabhKodes/agent-deck/issues/608:
 	// Only attempt JSONL discovery for sessions that previously had a
 	// conversation (restart recovery). A zero ClaudeDetectedAt means this
 	// session has never been started before — it should get a fresh

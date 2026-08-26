@@ -9,7 +9,7 @@ import (
 
 	"go.uber.org/goleak"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // newTestDB creates a temporary StateDB for engine tests.

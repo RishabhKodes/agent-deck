@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // The scope matrix: tool x scope x {attach, detach, move}, against the real

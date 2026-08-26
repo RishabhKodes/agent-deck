@@ -7,15 +7,12 @@
 
 **Your AI agent command center**
 
-[![GitHub Stars](https://img.shields.io/github/stars/asheshgoplani/agent-deck?style=for-the-badge&logo=github&color=yellow&labelColor=1a1b26)](https://github.com/asheshgoplani/agent-deck/stargazers)
-[![Downloads](https://img.shields.io/github/downloads/asheshgoplani/agent-deck/total?style=for-the-badge&logo=github&color=bb9af7&labelColor=1a1b26)](https://github.com/asheshgoplani/agent-deck/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/RishabhKodes/agent-deck?style=for-the-badge&logo=github&color=yellow&labelColor=1a1b26)](https://github.com/RishabhKodes/agent-deck/stargazers)
 [![Go Version](https://img.shields.io/badge/Go-1.25.13-00ADD8?style=for-the-badge&logo=go&labelColor=1a1b26)](https://go.dev)
 [![License](https://img.shields.io/badge/License-MIT-9ece6a?style=for-the-badge&labelColor=1a1b26)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20WSL-7aa2f7?style=for-the-badge&labelColor=1a1b26)](https://github.com/asheshgoplani/agent-deck)
-[![Latest Release](https://img.shields.io/github/v/release/asheshgoplani/agent-deck?style=for-the-badge&color=e0af68&labelColor=1a1b26)](https://github.com/asheshgoplani/agent-deck/releases)
-[![Discord](https://img.shields.io/discord/1469423271144587379?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2&labelColor=1a1b26)](https://discord.gg/e4xSs6NBN8)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20WSL-7aa2f7?style=for-the-badge&labelColor=1a1b26)](https://github.com/RishabhKodes/agent-deck)
 
-[Install](#installation) . [Quick Start](#quick-start) . [Features](#features) . [Conductor](#conductor) . [Docs](#documentation) . [Discord](https://discord.gg/e4xSs6NBN8) . [FAQ](#faq)
+[Install](#installation) . [Native Workspace](#native-workspace-experimental) . [Quick Start](#quick-start) . [Features](#features) . [Fork Status](FORK.md) . [FAQ](#faq)
 
 </div>
 
@@ -23,49 +20,26 @@
 
 https://github.com/user-attachments/assets/e4f55917-435c-45ba-92cc-89737d0d1401
 
-## Maintainers & contributors wanted
-
-agent-deck is actively maintained by [Ashesh](https://github.com/asheshgoplani), and it welcomes both contributors and co-maintainers. PRs here don't sit: every incoming PR is validated (applied, built, tested) within about a day, and good ones merge in the next release batch. Recent releases have shipped dozens of community fixes.
-
-Beyond one-off PRs, we're looking for 1-2 regular co-maintainers: people who want to own an area (a tool integration, the TUI, the web view, CI) and help triage and review. The validation pipeline does the heavy lifting; maintainers steer.
-
-To get started:
-
-- Read [CONTRIBUTING.md](CONTRIBUTING.md) for how the review pipeline works.
-- Start at the pinned issue: [Looking for contributors — start here (#1650)](https://github.com/asheshgoplani/agent-deck/issues/1650).
-- The [agent-deck-contributor skill](.github/skills/agent-deck-contributor) walks an AI agent (or you) through building, testing, and shaping a clean PR.
-
-If you've had a couple of PRs land here and want to help steer, say so on #1650 or open an issue titled "maintainer: your area". We'd love the help.
+> [!IMPORTANT]
+> This is an independent fork by RishabhKodes, based on Agent Deck v1.15.0.
+> It is not an official upstream release and does not receive upstream updates.
+> See [FORK.md](FORK.md) for provenance, compatibility, and release policy.
 
 ## Installation
 
 **Works on:** macOS, Linux, Windows (WSL)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/asheshgoplani/agent-deck/main/install.sh | bash
+git clone https://github.com/RishabhKodes/agent-deck.git
+cd agent-deck
+make install
 ```
 
-Then run: `agent-deck`
+This fork currently publishes development builds only. Its inherited self-updater,
+release workflow, Homebrew publishing, and upstream feedback submission are disabled.
 
-<details>
-<summary>Other install methods</summary>
-
-**Homebrew**
-```bash
-brew install asheshgoplani/tap/agent-deck
-```
-
-**Go**
-```bash
-go install github.com/asheshgoplani/agent-deck/cmd/agent-deck@latest
-```
-
-**From Source**
-```bash
-git clone https://github.com/asheshgoplani/agent-deck.git && cd agent-deck && make install
-```
-
-</details>
+Then run `agent-deck` for the classic interface or `agent-deck workspace` for the
+new two-pane workspace.
 
 <details>
 <summary>Uninstalling</summary>
@@ -78,6 +52,28 @@ agent-deck uninstall --keep-data  # Remove binary only, keep sessions
 See [Troubleshooting](skills/agent-deck/references/troubleshooting.md#uninstalling) for full details.
 
 </details>
+
+## Native Workspace (experimental)
+
+```bash
+agent-deck workspace
+```
+
+Workspace mode keeps a session navigator visible on the left and attaches the
+selected agent's real tmux terminal on the right. Moving with `j`/`k` or the arrow
+keys switches the displayed session without stopping any agent. Press Enter to
+focus the agent, Ctrl+Q to return to the navigator, `m` to open the full manager,
+and `q` to detach the dashboard while leaving every session running.
+
+Configure the navigator width if desired:
+
+```toml
+[workspace]
+sidebar_width = 32
+```
+
+Use `agent-deck workspace stop` to stop only the outer dashboard. Agent sessions
+remain alive because they continue to run in their original tmux servers.
 
 ## Quick Start
 
@@ -1092,3 +1088,14 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [tmux](h
 **[Docs](skills/agent-deck/references/) . [Discord](https://discord.gg/e4xSs6NBN8) . [Issues](https://github.com/asheshgoplani/agent-deck/issues) . [Discussions](https://github.com/asheshgoplani/agent-deck/discussions)**
 
 </div>
+
+## Upstream attribution
+
+This independent fork is based on
+[Agent Deck](https://github.com/asheshgoplani/agent-deck), originally created
+and maintained by [Ashesh Goplani](https://github.com/asheshgoplani). It was
+forked from release `v1.15.0` at commit
+`bf50689893053c6dd33a29b21e12eb36e251d94b`. We are grateful to the original
+maintainer and contributors for the project this work builds upon. The original
+copyright and MIT license remain in [LICENSE](LICENSE); see [FORK.md](FORK.md)
+for this fork's provenance and divergence policy.

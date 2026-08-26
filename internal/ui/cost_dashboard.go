@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/asheshgoplani/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
 )
 
 type costDashboard struct {

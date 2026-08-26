@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestParity_WebActionMatchesDirectMutator covers the runtime sync invariant

@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // applyClaudeCwdSync propagates Claude Code's `/cd` working-directory change

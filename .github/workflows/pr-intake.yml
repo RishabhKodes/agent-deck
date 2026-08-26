@@ -1,4 +1,4 @@
-name: PR Intake Gate (observe-only)
+name: PR Intake Gate (disabled in independent fork)
 
 # Reads the PR body against the intake contract in .github/INTAKE.md, applies
 # advisory labels, and posts ONE kind comment. This is OBSERVE-ONLY: it never
@@ -30,7 +30,7 @@ concurrency:
 jobs:
   intake:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    if: ${{ false }} # Re-enable only after fork-owned intake policy is configured.
     steps:
       - name: Evaluate intake contract
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9

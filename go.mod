@@ -1,4 +1,4 @@
-module github.com/asheshgoplani/agent-deck
+module github.com/RishabhKodes/agent-deck
 
 go 1.25.13
 

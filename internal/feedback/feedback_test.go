@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/feedback"
+	"github.com/RishabhKodes/agent-deck/internal/feedback"
 	"github.com/stretchr/testify/require"
 )
 

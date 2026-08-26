@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // RevivalClass categorizes an Instance's recoverability at scan time.

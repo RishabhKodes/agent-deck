@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"al.essio.dev/pkg/shellescape"
-	"github.com/asheshgoplani/agent-deck/internal/docker"
-	"github.com/asheshgoplani/agent-deck/internal/procfd"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/docker"
+	"github.com/RishabhKodes/agent-deck/internal/procfd"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 	"github.com/stretchr/testify/require"
 )
 

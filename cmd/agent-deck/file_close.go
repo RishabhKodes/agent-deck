@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 // closeChecked closes a writable file and records failures that would

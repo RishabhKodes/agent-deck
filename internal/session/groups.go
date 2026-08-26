@@ -12,7 +12,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/asheshgoplani/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/git"
 )
 
 // ErrGroupAlreadyExists is returned by RenameGroup when the target path collides with an existing group.

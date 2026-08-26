@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func handlePlugin(profile string, args []string) {

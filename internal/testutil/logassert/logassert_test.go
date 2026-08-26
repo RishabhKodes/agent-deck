@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil/logassert"
+	"github.com/RishabhKodes/agent-deck/internal/testutil/logassert"
 )
 
 func TestCapture_RecordsLevelAndMessage(t *testing.T) {

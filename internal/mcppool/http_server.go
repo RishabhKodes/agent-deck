@@ -13,9 +13,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
-	"github.com/asheshgoplani/agent-deck/internal/childenv"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/childenv"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 var httpLog = logging.ForComponent(logging.CompHTTP)

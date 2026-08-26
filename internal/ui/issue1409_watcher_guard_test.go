@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/send"
+	"github.com/RishabhKodes/agent-deck/internal/send"
 )
 
 // guardedFakePane extends fakeConductorPane semantics with composer-clear

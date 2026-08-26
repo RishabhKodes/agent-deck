@@ -1,5 +1,5 @@
 # Deploy static site to GitHub Pages from /site folder
-name: Deploy to GitHub Pages
+name: Deploy to GitHub Pages (disabled in independent fork)
 
 on:
   # Runs on pushes to main branch
@@ -24,6 +24,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ false }} # The fork does not publish the inherited upstream site.
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

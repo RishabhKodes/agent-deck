@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/feedback"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/feedback"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // ghUserLogin returns the authenticated GitHub account login (e.g.
@@ -33,6 +33,11 @@ var ghUserLogin = func() string {
 // interactively as they are emitted (see #679 follow-up: a previous strings.Builder wrapper
 // hid every prompt until after the function returned, leaving users typing at a blank cursor).
 func handleFeedback(args []string) {
+	if !feedback.IsSubmissionEnabled() {
+		fmt.Println("Feedback submission is disabled in this independent fork.")
+		fmt.Println("Use https://github.com/RishabhKodes/agent-deck/issues instead.")
+		return
+	}
 	if err := handleFeedbackWithSender(args, Version, feedback.NewSender(), os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -179,7 +184,7 @@ func renderFeedbackDisclosure(w io.Writer, body, login string) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "This feedback will be posted PUBLICLY on GitHub.")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Where:  https://github.com/asheshgoplani/agent-deck/discussions/600")
+	fmt.Fprintln(w, "  Where:  https://github.com/RishabhKodes/agent-deck/discussions/600")
 	fmt.Fprintln(w, "  How:    via the `gh` GitHub CLI (already installed and authenticated on this machine)")
 	fmt.Fprintln(w, asLine)
 	fmt.Fprintln(w)
@@ -255,7 +260,7 @@ func printFeedbackHelp(w io.Writer) {
 	fmt.Fprintln(w, "  1. You are asked for a rating (1-5, n to never ask again, q to quit).")
 	fmt.Fprintln(w, "  2. On a valid rating you may add a short comment.")
 	fmt.Fprintln(w, "  3. BEFORE anything is sent, the CLI shows a disclosure block with:")
-	fmt.Fprintln(w, "       - the public URL (https://github.com/asheshgoplani/agent-deck/discussions/600),")
+	fmt.Fprintln(w, "       - the public URL (https://github.com/RishabhKodes/agent-deck/discussions/600),")
 	fmt.Fprintln(w, "       - that it posts via the `gh` CLI under your GitHub account,")
 	fmt.Fprintln(w, "       - your GitHub username (as seen by `gh api user -q .login`),")
 	fmt.Fprintln(w, "       - the exact body that will be posted.")
@@ -267,7 +272,7 @@ func printFeedbackHelp(w io.Writer) {
 	fmt.Fprintln(w, "  or browser fallback on this path — nothing is sent without consent.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "A private/anonymous feedback channel is being designed for a future")
-	fmt.Fprintln(w, "release — track in https://github.com/asheshgoplani/agent-deck/issues/679.")
+	fmt.Fprintln(w, "release — track in https://github.com/RishabhKodes/agent-deck/issues/679.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Prompt frequency (v1.7.41+):")
 	fmt.Fprintln(w, "  The TUI auto-prompt appears after 7 launches or 3 days of use,")

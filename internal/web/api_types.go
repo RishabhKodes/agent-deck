@@ -1,6 +1,6 @@
 package web
 
-import "github.com/asheshgoplani/agent-deck/internal/session"
+import "github.com/RishabhKodes/agent-deck/internal/session"
 
 // Error code constants for API error responses.
 const (

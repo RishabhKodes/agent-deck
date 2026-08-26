@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/git"
 )
 
 // IsRemovableWorktree reports whether agent-deck may safely delete the

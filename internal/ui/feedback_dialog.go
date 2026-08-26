@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/feedback"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/feedback"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -331,7 +331,7 @@ func (d *FeedbackDialog) renderConfirmView(warnStyle, textStyle, dimStyle lipglo
 	warning := warnStyle.Render("This feedback will be posted PUBLICLY on GitHub.")
 
 	details := textStyle.Render(strings.Join([]string{
-		"  Where:  https://github.com/asheshgoplani/agent-deck/discussions/600",
+		"  Where:  https://github.com/RishabhKodes/agent-deck/discussions/600",
 		"  How:    via the `gh` CLI (already authenticated on this machine)",
 		asLine,
 	}, "\n"))

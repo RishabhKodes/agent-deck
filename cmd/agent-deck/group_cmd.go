@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // groupVerbCanonical maps a user-supplied group subcommand verb to its

@@ -4,7 +4,7 @@
 
 Please report security issues privately via one of:
 
-- GitHub Security Advisory: https://github.com/asheshgoplani/agent-deck/security/advisories/new (preferred)
+- GitHub Security Advisory: https://github.com/RishabhKodes/agent-deck/security/advisories/new (preferred)
 - Email: ashesh.goplani96@gmail.com
 
 Do not file public issues for security reports. We will respond within 7 days and coordinate a fix + disclosure timeline.
@@ -25,7 +25,7 @@ Out of scope: third-party Claude / agent CLI tools agent-deck wraps, third-party
   an attestation only ever covers the complete, intact release. Consumers can
   verify a binary was built by this repo's CI from the tagged source:
   ```bash
-  gh attestation verify agent-deck_*_linux_amd64.tar.gz --repo asheshgoplani/agent-deck
+  gh attestation verify agent-deck_*_linux_amd64.tar.gz --repo RishabhKodes/agent-deck
   ```
   **Known gap: v1.10.9, v1.10.10 and v1.10.11 have no attestation.** A failure
   publishing the Homebrew tap aborted the release job before the signing step, so

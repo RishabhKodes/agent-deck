@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
 	"github.com/fsnotify/fsnotify"
 )
 

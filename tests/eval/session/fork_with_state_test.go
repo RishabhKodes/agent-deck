@@ -40,7 +40,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/tests/eval/harness"
+	"github.com/RishabhKodes/agent-deck/tests/eval/harness"
 )
 
 // TestEval_SessionForkWithState_RealBinary is the gap-10 CLI eval. Drives the

@@ -38,7 +38,7 @@ func (e *shellEvalError) Error() string {
 	return e.expr + ": " + e.err.Error() + ": " + e.out
 }
 
-// Regression tests for https://github.com/asheshgoplani/agent-deck/issues/1858.
+// Regression tests for https://github.com/RishabhKodes/agent-deck/issues/1858.
 //
 // Reporter @yuvalsc: an `add --ssh` session crashes after ~250ms when the remote
 // user differs from the local one, because CLAUDE_CONFIG_DIR is built from the

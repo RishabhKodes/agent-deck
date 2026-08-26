@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
 )
 
 // TestTestMainDoesNotLeakBootstrapServer is the behavioral guard for the

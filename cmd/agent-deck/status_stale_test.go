@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestClassifyStale_Heuristics is a pure unit test over the three in-scope

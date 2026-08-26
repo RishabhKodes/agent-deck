@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
-// Regression tests for https://github.com/asheshgoplani/agent-deck/issues/1850.
+// Regression tests for https://github.com/RishabhKodes/agent-deck/issues/1850.
 //
 //  1. An exact duplicate registration was reported as success (exit 0, --json
 //     ignored entirely), so a script could not tell "created" from "already

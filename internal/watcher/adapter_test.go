@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/watcher"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/watcher"
 )
 
 // TestEventDedupKey_SameInputsSameKey verifies that identical inputs produce the same DedupKey.

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/tmuxutf8"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/tmuxutf8"
 )
 
 // tmuxProbeTimeout bounds the plain-argv tmux probes the CLI fires to identify

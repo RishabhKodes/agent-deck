@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // ReviveSummary tallies outcomes from a reviver sweep. Format() produces the

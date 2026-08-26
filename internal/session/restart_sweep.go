@@ -17,7 +17,7 @@ package session
 // The hook var makes the sweep testable without a live tmux server.
 
 import (
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // killDuplicateSessionsFn is indirected so tests can substitute a spy.

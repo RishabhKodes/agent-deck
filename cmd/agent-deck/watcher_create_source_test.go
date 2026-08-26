@@ -10,8 +10,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // `agent-deck watcher create ntfy|slack --topic X` validated --topic and then

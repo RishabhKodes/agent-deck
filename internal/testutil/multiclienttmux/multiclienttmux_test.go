@@ -4,7 +4,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil/multiclienttmux"
+	"github.com/RishabhKodes/agent-deck/internal/testutil/multiclienttmux"
 )
 
 func skipIfNoTmux(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/safego"
+	"github.com/RishabhKodes/agent-deck/internal/safego"
 )
 
 // lockedBuffer is a bytes.Buffer guarded by a mutex so tests can read while

@@ -32,7 +32,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestRegression746_InitialSelectRetriesOnNextLoad is the behavioral

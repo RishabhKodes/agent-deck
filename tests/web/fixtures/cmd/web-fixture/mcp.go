@@ -11,7 +11,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/asheshgoplani/agent-deck/internal/web"
+	"github.com/RishabhKodes/agent-deck/internal/web"
 )
 
 type fixtureMCPManager struct {

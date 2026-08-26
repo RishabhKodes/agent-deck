@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
-// Regression tests for https://github.com/asheshgoplani/agent-deck/issues/1853.
+// Regression tests for https://github.com/RishabhKodes/agent-deck/issues/1853.
 //
 // `session set <id> title <new>` had no collision check on either side of its
 // SetField call, so it could rename a session onto a title another session

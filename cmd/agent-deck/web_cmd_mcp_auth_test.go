@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/web"
+	"github.com/RishabhKodes/agent-deck/internal/web"
 )
 
 // Exact-tip auth matrix for the endpoints this change makes reachable.

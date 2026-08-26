@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
 )
 
 // ScriptConsentPolicy is the resolved value of [worktree] run_repo_scripts.

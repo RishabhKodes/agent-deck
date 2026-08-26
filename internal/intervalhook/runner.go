@@ -33,8 +33,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/safego"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/safego"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // defaultRescanInterval is how often the supervisor re-reads config to pick up

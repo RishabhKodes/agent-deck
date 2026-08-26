@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/vcs"
+	"github.com/RishabhKodes/agent-deck/internal/vcs"
 )
 
 func cleanupFixture(t *testing.T) (main, unpushed, busy, empty string, worktrees []vcs.Worktree) {

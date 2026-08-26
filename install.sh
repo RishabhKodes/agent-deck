@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # Agent Deck Installer
-# https://github.com/asheshgoplani/agent-deck
+# https://github.com/RishabhKodes/agent-deck
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/asheshgoplani/agent-deck/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/RishabhKodes/agent-deck/main/install.sh | bash
 #
 # Options:
 #   --name <name>       Custom binary name (default: agent-deck)
@@ -88,7 +88,7 @@ NC='\033[0m' # No Color
 BINARY_NAME="agent-deck"
 INSTALL_DIR="${HOME}/.local/bin"
 VERSION="latest"
-REPO="asheshgoplani/agent-deck"
+REPO="RishabhKodes/agent-deck"
 SKIP_TMUX_CONFIG=false
 SKIP_OPTIONAL_DEPS=false
 
@@ -555,7 +555,7 @@ if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/agent-deck.tar.gz"; then
     # Suggest Homebrew first if available (most reliable)
     if [[ "$OS" == "darwin" ]] && command -v brew &> /dev/null; then
         echo "Install via Homebrew instead (recommended):"
-        echo "  brew install asheshgoplani/tap/agent-deck"
+        echo "  No fork-owned Homebrew formula is published yet."
         echo ""
     fi
 
@@ -734,7 +734,7 @@ configure_tmux() {
 $MARKER
 $VERSION_MARKER $CURRENT_VERSION
 # Added by agent-deck installer - $(date +%Y-%m-%d)
-# https://github.com/asheshgoplani/agent-deck
+# https://github.com/RishabhKodes/agent-deck
 
 # Terminal with true color support
 set -g default-terminal \"tmux-256color\"

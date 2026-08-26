@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 const codexNotifyMarkerBegin = "# BEGIN AGENTDECK CODEX NOTIFY"

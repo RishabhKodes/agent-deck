@@ -23,7 +23,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestEval_SettingsTUI_SavePreservesTmux is the guard for #710 at the

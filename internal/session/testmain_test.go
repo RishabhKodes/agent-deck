@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // bootstrapSessionName is the idle tmux session kept alive for the lifetime

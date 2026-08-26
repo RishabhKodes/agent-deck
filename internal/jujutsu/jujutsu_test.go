@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/vcs"
+	"github.com/RishabhKodes/agent-deck/internal/vcs"
 )
 
 // TestJujutsuDetect_NonJJDir verifies that IsJJRepo returns false for a

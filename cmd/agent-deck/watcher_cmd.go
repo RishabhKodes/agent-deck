@@ -14,9 +14,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/watcher"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/watcher"
 )
 
 // channelConfig is the input format from the bash issue-watcher's channels.json.
@@ -1110,7 +1110,7 @@ func printWatcherHelp() {
 	fmt.Println("  # Then inside Claude Code in an agent-deck session, ask:")
 	fmt.Println("  # \"Use the watcher-creator skill to set up a GitHub watcher\"")
 	fmt.Println()
-	fmt.Println("Full reference: https://github.com/asheshgoplani/agent-deck#watchers")
+	fmt.Println("Full reference: https://github.com/RishabhKodes/agent-deck#watchers")
 }
 
 func watcherClientsPathForDisplay() string {

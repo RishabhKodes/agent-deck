@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/safeio"
+	"github.com/RishabhKodes/agent-deck/internal/safeio"
 )
 
 // Auth-death resilience (2026-07-26 fleet-death hardening).

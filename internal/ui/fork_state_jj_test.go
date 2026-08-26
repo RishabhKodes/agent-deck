@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/git"
 	"github.com/stretchr/testify/require"
 )
 

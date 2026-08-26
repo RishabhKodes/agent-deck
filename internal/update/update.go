@@ -16,12 +16,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
 )
 
 const (
 	// GitHubRepo is the repository to check for updates
-	GitHubRepo = "asheshgoplani/agent-deck"
+	GitHubRepo = "RishabhKodes/agent-deck"
 
 	// CacheFileName stores the last update check result
 	CacheFileName = "update-cache.json"

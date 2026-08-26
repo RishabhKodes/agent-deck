@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // AuthGate is the circuit-breaker seam a recovery sweep consults before every

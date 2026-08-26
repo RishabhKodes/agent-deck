@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/watcher"
+	"github.com/RishabhKodes/agent-deck/internal/watcher"
 )
 
 // TestHealthTracker_FreshTrackerIsHealthy verifies that a new tracker with no activity is Healthy.

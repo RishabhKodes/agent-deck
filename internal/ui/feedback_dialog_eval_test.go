@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/feedback"
+	"github.com/RishabhKodes/agent-deck/internal/feedback"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

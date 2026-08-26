@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
 )
 
 func handleMigratePaths(args []string) {

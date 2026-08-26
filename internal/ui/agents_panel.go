@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/asheshgoplani/agent-deck/internal/agents"
+	"github.com/RishabhKodes/agent-deck/internal/agents"
 )
 
 // AgentsPanel is the Agents tab: the grouped-by-machine fleet list and one

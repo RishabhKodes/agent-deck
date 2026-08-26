@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/desknotify"
+	"github.com/RishabhKodes/agent-deck/internal/desknotify"
 )
 
 const (

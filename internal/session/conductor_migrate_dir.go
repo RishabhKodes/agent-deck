@@ -11,8 +11,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
-	"github.com/asheshgoplani/agent-deck/internal/safeio"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/safeio"
 )
 
 // ConductorDefaultDir returns the default conductor base directory, IGNORING any

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/testutil/crossfixture"
+	"github.com/RishabhKodes/agent-deck/internal/testutil/crossfixture"
 )
 
 func TestNew_IsolatesHomeAndAgentDeckDir(t *testing.T) {

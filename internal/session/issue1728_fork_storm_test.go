@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // Issue #1728: with ~60 sessions the TUI sustained 150-350% CPU forking tmux

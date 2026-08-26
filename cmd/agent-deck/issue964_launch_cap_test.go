@@ -8,7 +8,7 @@ import (
 )
 
 // TestLaunch_RespectsMaxParallel_RegressionFor964 pins the fix for
-// https://github.com/asheshgoplani/agent-deck/issues/964.
+// https://github.com/RishabhKodes/agent-deck/issues/964.
 //
 // Bug: parallel `agent-deck launch` calls cascade into swap thrash because
 // each launch spawns claude (~1-2GB RSS, ~71GB VSZ) plus a go test runner /

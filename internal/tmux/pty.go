@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/termreply"
+	"github.com/RishabhKodes/agent-deck/internal/termreply"
 	"github.com/creack/pty"
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"

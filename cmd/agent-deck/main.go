@@ -25,21 +25,26 @@ import (
 	"github.com/muesli/termenv"
 	"golang.org/x/term"
 
-	"github.com/asheshgoplani/agent-deck/internal/costs"
-	"github.com/asheshgoplani/agent-deck/internal/feedback"
-	"github.com/asheshgoplani/agent-deck/internal/git"
-	"github.com/asheshgoplani/agent-deck/internal/intervalhook"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
-	"github.com/asheshgoplani/agent-deck/internal/tmux"
-	"github.com/asheshgoplani/agent-deck/internal/ui"
-	"github.com/asheshgoplani/agent-deck/internal/update"
-	"github.com/asheshgoplani/agent-deck/internal/vcs"
-	"github.com/asheshgoplani/agent-deck/internal/web"
+	"github.com/RishabhKodes/agent-deck/internal/costs"
+	"github.com/RishabhKodes/agent-deck/internal/feedback"
+	"github.com/RishabhKodes/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/intervalhook"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
+	"github.com/RishabhKodes/agent-deck/internal/ui"
+	"github.com/RishabhKodes/agent-deck/internal/update"
+	"github.com/RishabhKodes/agent-deck/internal/vcs"
+	"github.com/RishabhKodes/agent-deck/internal/web"
 )
 
 var Version = "1.15.0" // overridden at build time via -ldflags "-X main.Version=..."
+
+// This independent fork intentionally has no upstream release channel. Keep
+// every automatic and explicit self-update path disabled until a fork-owned
+// release process is designed and reviewed.
+const forkAutoUpdatesEnabled = false
 
 // Table column widths for list command output
 const (
@@ -62,6 +67,10 @@ func init() {
 // resolved the developer's REAL config and tripped the agentpaths
 // unsandboxed-test warning on every run of this package (issue #2012).
 func initUpdateSettings() {
+	if !forkAutoUpdatesEnabled {
+		_ = os.Setenv(update.SkipUpdateCheckEnv, "1")
+		_ = os.Setenv("AGENTDECK_DISABLE_FEEDBACK", "1")
+	}
 	settings := session.GetUpdateSettings()
 	update.SetCheckInterval(settings.CheckIntervalHours)
 	update.SetBridgeScriptInstaller(session.InstallBridgeScript)
@@ -73,6 +82,10 @@ func initUpdateSettings() {
 // is behind. Offline — never touches the network. Conductor task #45.
 func writeVersionOutput(w io.Writer, currentVersion string) {
 	fmt.Fprintf(w, "Agent Deck v%s", currentVersion)
+	if !forkAutoUpdatesEnabled {
+		fmt.Fprintln(w)
+		return
+	}
 	info, err := update.CachedUpdateInfo(currentVersion)
 	if err == nil && info != nil && info.Available {
 		fmt.Fprintf(w, " (update available: v%s)", info.LatestVersion)
@@ -83,6 +96,9 @@ func writeVersionOutput(w io.Writer, currentVersion string) {
 // printUpdateNotice checks for updates and prints a one-liner if available
 // Uses cache to avoid API calls - only prints if update was already detected
 func printUpdateNotice() {
+	if !forkAutoUpdatesEnabled {
+		return
+	}
 	settings := session.GetUpdateSettings()
 	if !settings.GetCheckEnabled() || !settings.GetNotifyInCLI() {
 		return
@@ -100,6 +116,9 @@ func printUpdateNotice() {
 
 // promptForUpdate checks for updates and prompts user if auto_update is enabled
 func promptForUpdate() bool {
+	if !forkAutoUpdatesEnabled {
+		return false
+	}
 	settings := session.GetUpdateSettings()
 	if !settings.GetCheckEnabled() {
 		return false
@@ -299,6 +318,15 @@ func main() {
 			return
 		case "profile":
 			handleProfile(args[1:])
+			return
+		case "workspace":
+			handleWorkspace(profile, args[1:])
+			return
+		case "__workspace-sidebar":
+			handleWorkspaceSidebar(profile, args[1:])
+			return
+		case "__workspace-view":
+			handleWorkspaceView(profile, args[1:])
 			return
 		case "update":
 			handleUpdate(args[1:])
@@ -982,6 +1010,7 @@ func main() {
 var globalFlagSubcommands = map[string]bool{
 	"add": true, "list": true, "ls": true, "remove": true, "rm": true,
 	"rename": true, "mv": true, "status": true, "profile": true, "update": true,
+	"workspace": true, "__workspace-sidebar": true, "__workspace-view": true,
 	"session": true, "mcp": true, "plugin": true, "skill": true, "mcp-proxy": true,
 	"group": true, "try": true, "launch": true, "conductor": true,
 	"telegram-doctor": true, "watcher": true, "openclaw": true, "oc": true,
@@ -3195,6 +3224,11 @@ func handleProfileSetDefault(out *CLIOutput, name string) {
 
 // handleUpdate checks for and performs updates
 func handleUpdate(args []string) {
+	if !forkAutoUpdatesEnabled {
+		fmt.Println("Updates are disabled in this independent Agent Deck fork.")
+		fmt.Println("Build and install updates from https://github.com/RishabhKodes/agent-deck.")
+		return
+	}
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 	checkOnly := fs.Bool("check", false, "Only check for updates, don't install")
 	targetVersion := fs.String("version", "", "Install a specific released version (e.g. 1.7.3); may be a downgrade")
@@ -3568,6 +3602,7 @@ func printHelp() {
 	fmt.Println("  agent            Adopt and inspect agent definitions")
 	fmt.Println("  telegram-doctor  Audit channel-owning sessions for telegram drops (#1138)")
 	fmt.Println("  profile          Manage profiles")
+	fmt.Println("  workspace        Open the experimental native two-pane workspace")
 	fmt.Println("  update           Check for and install updates")
 	fmt.Println("  debug-dump       Dump debug ring buffer to file for sharing")
 	fmt.Println("  migrate-paths    Copy legacy ~/.agent-deck files into XDG paths")
@@ -4145,7 +4180,7 @@ func handleUninstall(args []string) {
 
 	fmt.Println()
 	fmt.Println("Thank you for using Agent Deck!")
-	fmt.Println("Feedback: https://github.com/asheshgoplani/agent-deck/issues")
+	fmt.Println("Feedback: https://github.com/RishabhKodes/agent-deck/issues")
 }
 
 // isNestedSession returns true if we're running inside an agent-deck managed tmux session.

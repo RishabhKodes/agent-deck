@@ -1,4 +1,4 @@
-// Regression tests for https://github.com/asheshgoplani/agent-deck/issues/663:
+// Regression tests for https://github.com/RishabhKodes/agent-deck/issues/663:
 // multi-repo sessions silently drop all conversation history on stop→start.
 //
 // Root cause per .planning/investigate-multirepo-restart/REPORT.md: the

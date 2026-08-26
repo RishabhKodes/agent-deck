@@ -25,10 +25,10 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/BurntSushi/toml"
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
-	"github.com/asheshgoplani/agent-deck/internal/logging"
-	"github.com/asheshgoplani/agent-deck/internal/platform"
-	"github.com/asheshgoplani/agent-deck/internal/shellwords"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/platform"
+	"github.com/RishabhKodes/agent-deck/internal/shellwords"
 	dark "github.com/thiagokokada/dark-mode-go"
 )
 

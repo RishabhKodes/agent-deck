@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/testutil/profilefixture"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/testutil/profilefixture"
 )
 
 func TestSetup_AppliesEnvAndConfig(t *testing.T) {

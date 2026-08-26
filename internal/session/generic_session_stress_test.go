@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/statedb"
+	"github.com/RishabhKodes/agent-deck/internal/statedb"
 )
 
 // TestStress_StaleFullSavePreservesStickyGenericID is the primary durability

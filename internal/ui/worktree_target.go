@@ -1,10 +1,10 @@
 package ui
 
 import (
-	"github.com/asheshgoplani/agent-deck/internal/git"
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/vcs"
-	"github.com/asheshgoplani/agent-deck/internal/vcsbackend"
+	"github.com/RishabhKodes/agent-deck/internal/git"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/vcs"
+	"github.com/RishabhKodes/agent-deck/internal/vcsbackend"
 )
 
 // resolveWorktreeTarget resolves the worktree path for a new or forked session

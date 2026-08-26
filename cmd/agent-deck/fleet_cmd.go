@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/fleet"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/fleet"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // handleFleet dispatches `agent-deck fleet <status|recover>`.

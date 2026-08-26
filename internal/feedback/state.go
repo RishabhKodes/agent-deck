@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/agentpaths"
+	"github.com/RishabhKodes/agent-deck/internal/agentpaths"
 )
 
 // State holds the persisted feedback preferences for a user.
@@ -198,6 +198,9 @@ func MigrateLegacyOptOut(s *State, currentVersion string) bool {
 // Pure: never mutates state. Callers that want to track first-seen should
 // call RecordLaunch at process start.
 func ShouldShow(s *State, currentVersion string, now time.Time) bool {
+	if !IsSubmissionEnabled() {
+		return false
+	}
 	if s.OptOutVersion != "" {
 		// Post-#967: opt-out is scoped to the MAJOR.MINOR series. Same
 		// series → block; release-series bump → fall through.

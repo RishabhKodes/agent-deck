@@ -47,7 +47,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 const (

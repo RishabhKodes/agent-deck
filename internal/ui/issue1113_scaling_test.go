@@ -18,7 +18,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // TestIssue1113_PreviewPaneFitsAtCommonWidths asserts the preview pane is

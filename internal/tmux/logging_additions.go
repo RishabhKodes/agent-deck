@@ -3,7 +3,7 @@ package tmux
 import (
 	"log/slog"
 
-	"github.com/asheshgoplani/agent-deck/internal/logging"
+	"github.com/RishabhKodes/agent-deck/internal/logging"
 )
 
 // recordPipeDegraded notes one occurrence of the control-mode pipe failing

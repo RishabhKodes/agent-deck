@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/asheshgoplani/agent-deck/internal/session"
-	"github.com/asheshgoplani/agent-deck/internal/web"
+	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/web"
 )
 
 // buildWebServer parses web-specific flags and returns a ready-to-start server.

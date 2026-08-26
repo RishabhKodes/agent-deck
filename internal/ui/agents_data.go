@@ -9,8 +9,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/asheshgoplani/agent-deck/internal/agents"
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/agents"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 // agentsRefreshInterval bounds how often the TUI re-reads the agents registry

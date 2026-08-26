@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asheshgoplani/agent-deck/internal/watcher"
+	"github.com/RishabhKodes/agent-deck/internal/watcher"
 )
 
 // fakeConductorPane scripts pane captures and statuses so the verify-retry loop

@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"github.com/asheshgoplani/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/session"
 	"github.com/charmbracelet/lipgloss"
 )
 

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asheshgoplani/agent-deck/internal/update"
+	"github.com/RishabhKodes/agent-deck/internal/update"
 )
 
 // writeTestCache mirrors update.saveCache on-disk layout so the offline
@@ -34,12 +34,10 @@ func isolateVersionUpdatePaths(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(tmpHome, "xdg-cache"))
 }
 
-// Conductor task #45 — `agent-deck --version` should append
-// "(update available: vX.Y.Z)" when the disk cache shows the user is
-// behind. The annotation must be cache-only (no network hit — --version
-// should stay instant).
+// This independent fork has no binary release channel. Version output must
+// therefore ignore any update cache inherited from an upstream installation.
 
-func TestVersionOutput_AppendsUpdateAnnotationWhenBehind(t *testing.T) {
+func TestVersionOutput_IgnoresInheritedUpdateCache(t *testing.T) {
 	isolateVersionUpdatePaths(t)
 
 	// Seed a cache entry claiming 1.7.20 is well behind 1.7.58.
@@ -57,7 +55,7 @@ func TestVersionOutput_AppendsUpdateAnnotationWhenBehind(t *testing.T) {
 	writeVersionOutput(&buf, "1.7.20")
 	got := buf.String()
 
-	want := "Agent Deck v1.7.20 (update available: v1.7.58)\n"
+	want := "Agent Deck v1.7.20\n"
 	if got != want {
 		t.Fatalf("version output mismatch:\n got: %q\nwant: %q", got, want)
 	}
