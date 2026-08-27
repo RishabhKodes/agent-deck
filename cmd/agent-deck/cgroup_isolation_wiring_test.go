@@ -83,7 +83,9 @@ func TestLogCgroupIsolationDecision_WiredIntoBootstrap(t *testing.T) {
 			"AGENTDECK_PROFILE=test-obs01",
 			"TERM=dumb",
 		)
-		cmd := exec.Command(binPath)
+		// The default command opens the lightweight workspace compositor. This
+		// observation is specifically wired into the classic manager bootstrap.
+		cmd := exec.Command(binPath, "manager")
 		cmd.Env = env
 		// TUI blocks on stdin — detach with its own pgroup so it can be
 		// SIGTERM'd as a unit once we're done with it (see the deferred

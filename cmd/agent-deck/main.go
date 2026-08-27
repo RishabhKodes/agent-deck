@@ -287,6 +287,7 @@ func main() {
 	tmux.WarnIfVulnerableTmux()
 
 	var webEnabled bool
+	var classicManagerRequested bool
 	// webHeadless: true when --no-tui is passed to the `web` subcommand.
 	// Skips bubbletea boot (the bulk of ~60 MB RSS) and runs HTTP-server only.
 	var webHeadless bool
@@ -322,6 +323,11 @@ func main() {
 		case "workspace":
 			handleWorkspace(profile, args[1:])
 			return
+		case "manager":
+			// Keep the original management TUI available explicitly. Remaining
+			// arguments are legacy TUI flags such as --group and --select.
+			classicManagerRequested = true
+			args = args[1:]
 		case "__workspace-sidebar":
 			handleWorkspaceSidebar(profile, args[1:])
 			return
@@ -455,6 +461,13 @@ func main() {
 			handleDebugDump()
 			return
 		}
+	}
+
+	// The native two-pane workspace is the primary interactive experience.
+	// Legacy TUI flags still open the classic manager for compatibility.
+	if !classicManagerRequested && !webEnabled && len(args) == 0 {
+		handleWorkspace(profile, nil)
+		return
 	}
 
 	// Every path that reaches this point boots the bubbletea TUI (which
@@ -1010,7 +1023,7 @@ func main() {
 var globalFlagSubcommands = map[string]bool{
 	"add": true, "list": true, "ls": true, "remove": true, "rm": true,
 	"rename": true, "mv": true, "status": true, "profile": true, "update": true,
-	"workspace": true, "__workspace-sidebar": true, "__workspace-view": true,
+	"workspace": true, "manager": true, "__workspace-sidebar": true, "__workspace-view": true,
 	"session": true, "mcp": true, "plugin": true, "skill": true, "mcp-proxy": true,
 	"group": true, "try": true, "launch": true, "conductor": true,
 	"telegram-doctor": true, "watcher": true, "openclaw": true, "oc": true,
@@ -3597,7 +3610,7 @@ func printHelp() {
 	fmt.Println("  --select <id|title>    Launch TUI with cursor on a specific session (all groups stay visible)")
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  (none)           Start the TUI")
+	fmt.Println("  (none)           Open the native two-pane workspace")
 	fmt.Println("  add <path>       Add a new session")
 	fmt.Println("  launch [path]    Add, start, and optionally send a message in one step")
 	fmt.Println("  accounts         List configured named account slots")
@@ -3624,7 +3637,8 @@ func printHelp() {
 	fmt.Println("  agent            Adopt and inspect agent definitions")
 	fmt.Println("  telegram-doctor  Audit channel-owning sessions for telegram drops (#1138)")
 	fmt.Println("  profile          Manage profiles")
-	fmt.Println("  workspace        Open the experimental native two-pane workspace")
+	fmt.Println("  workspace        Open the native two-pane workspace (explicit alias)")
+	fmt.Println("  manager          Open the classic management TUI")
 	fmt.Println("  update           Check for and install updates")
 	fmt.Println("  debug-dump       Dump debug ring buffer to file for sharing")
 	fmt.Println("  migrate-paths    Copy legacy ~/.agent-deck files into XDG paths")

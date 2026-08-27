@@ -77,7 +77,7 @@ func TestNestedSessionAllowsCLICommands(t *testing.T) {
 		subcommands := []string{
 			"add", "list", "ls", "remove", "rm", "status",
 			"session", "mcp", "skill", "group", "try", "worktree", "wt",
-			"profile", "update", "mcp-proxy", "web", "uninstall", "migrate-paths", "hooks", "codex-hooks", "codex-notify", "gemini-hooks", "cursor-hooks",
+			"profile", "workspace", "manager", "update", "mcp-proxy", "web", "uninstall", "migrate-paths", "hooks", "codex-hooks", "codex-notify", "gemini-hooks", "cursor-hooks",
 			"version", "--version", "-v",
 			"help", "--help", "-h",
 		}
@@ -100,11 +100,11 @@ func TestNestedSessionAllowsCLICommands(t *testing.T) {
 		}
 	})
 
-	// No args (TUI mode) with profile flag should leave empty args
-	t.Run("profile_flag_only_triggers_tui_block", func(t *testing.T) {
+	// No args (workspace mode) with profile flag should leave empty args.
+	t.Run("profile_flag_only_triggers_workspace", func(t *testing.T) {
 		_, args := extractProfileFlag([]string{"-p", "work"})
 		if len(args) != 0 {
-			t.Errorf("expected empty args for TUI mode with profile flag, got %v", args)
+			t.Errorf("expected empty args for workspace mode with profile flag, got %v", args)
 		}
 	})
 }

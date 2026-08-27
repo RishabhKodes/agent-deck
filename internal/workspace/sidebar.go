@@ -262,19 +262,18 @@ func (m *sidebarModel) View() string {
 		height = 24
 	}
 
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 	activeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
 	selectedStyle := lipgloss.NewStyle().Background(lipgloss.Color("236")).Bold(true)
 	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
 
-	lines := []string{
-		fitLine(headerStyle.Render(" AGENT DECK"), width),
+	lines := selectedSummaryLines(m.selected(), width, dimStyle, activeStyle)
+	lines = append(lines,
 		fitLine(dimStyle.Render(" "+m.profile+" · workspace"), width),
 		strings.Repeat("─", maxInt(1, width)),
-	}
+	)
 
-	contentLimit := maxInt(1, height-5)
+	contentLimit := maxInt(1, height-len(lines)-2)
 	contentLines := make([]string, 0, contentLimit)
 	lastGroup := "\x00"
 	for index := m.offset; index < len(m.items) && len(contentLines) < contentLimit; index++ {
@@ -321,7 +320,7 @@ func (m *sidebarModel) View() string {
 	}
 	lines = append(lines, contentLines[:contentLimit]...)
 
-	status := "↑↓ switch  enter open"
+	status := "↑↓ switch  enter focus"
 	if m.busy != "" {
 		status = m.busy
 	} else if m.err != nil {
@@ -332,6 +331,61 @@ func (m *sidebarModel) View() string {
 		fitLine(dimStyle.Render("m manage  q detach"), width),
 	)
 	return strings.Join(lines, "\n")
+}
+
+func selectedSummaryLines(item *sidebarItem, width int, dimStyle, activeStyle lipgloss.Style) []string {
+	if item == nil || item.data == nil {
+		return []string{
+			fitLine(" No session selected", width),
+			fitLine(dimStyle.Render(" Status: —"), width),
+			fitLine(dimStyle.Render(" Model:  —"), width),
+		}
+	}
+
+	inst := item.data
+	tool := strings.ToUpper(strings.TrimSpace(inst.Tool))
+	if tool == "" {
+		tool = "SHELL"
+	}
+	titleWidth := maxInt(1, width-utf8.RuneCountInString(tool)-3)
+	title := truncateRunes(inst.Title, titleWidth)
+	gap := maxInt(1, width-utf8.RuneCountInString(title)-utf8.RuneCountInString(tool)-2)
+	titleLine := " " + title + strings.Repeat(" ", gap) + activeStyle.Render(tool)
+
+	status := strings.TrimSpace(string(inst.Status))
+	if status == "" {
+		status = "unknown"
+	}
+	model := selectedModelLabel(inst)
+	if model == "" {
+		model = "tool default"
+	}
+
+	return []string{
+		fitLine(titleLine, width),
+		fitLine(" Status: "+statusGlyph(inst)+" "+status, width),
+		fitLine(dimStyle.Render(" Model:  "+model), width),
+	}
+}
+
+func selectedModelLabel(inst *session.InstanceData) string {
+	if inst == nil {
+		return ""
+	}
+	modelID := ""
+	switch {
+	case session.IsClaudeCompatible(inst.Tool):
+		if opts, err := session.UnmarshalClaudeOptions(inst.ToolOptionsJSON); err == nil && opts != nil {
+			modelID = opts.Model
+		}
+	case session.IsCodexCompatible(inst.Tool):
+		if opts, err := session.UnmarshalCodexOptions(inst.ToolOptionsJSON); err == nil && opts != nil {
+			modelID = opts.Model
+		}
+	case inst.Tool == "gemini":
+		modelID = inst.GeminiModel
+	}
+	return session.ParseModelID(modelID).Display()
 }
 
 func (m *sidebarModel) selected() *sidebarItem {
@@ -455,7 +509,8 @@ func (m *sidebarModel) ensureCursorVisible() {
 	if m.cursor < m.offset {
 		m.offset = m.cursor
 	}
-	visibleItems := maxInt(1, (m.height-7)/2)
+	// Six fixed header lines and two footer lines surround two lines per item.
+	visibleItems := maxInt(1, (m.height-8)/2)
 	if m.cursor >= m.offset+visibleItems {
 		m.offset = m.cursor - visibleItems + 1
 	}

@@ -26,7 +26,7 @@ func handleWorkspace(profile string, args []string) {
 	fs.Usage = func() {
 		fmt.Println("Usage: agent-deck [-p profile] workspace [options]")
 		fmt.Println()
-		fmt.Println("Open the experimental native two-pane agent workspace.")
+		fmt.Println("Open the native two-pane agent workspace.")
 		fmt.Println("Ctrl+Q returns to the navigator; q detaches without stopping agents.")
 		fmt.Println()
 		fmt.Println("Options:")

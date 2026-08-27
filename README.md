@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/License-MIT-9ece6a?style=for-the-badge&labelColor=1a1b26)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20WSL-7aa2f7?style=for-the-badge&labelColor=1a1b26)](https://github.com/RishabhKodes/agent-deck)
 
-[Install](#installation) . [Native Workspace](#native-workspace-experimental) . [Quick Start](#quick-start) . [Features](#features) . [Fork Status](FORK.md) . [FAQ](#faq)
+[Install](#installation) . [Native Workspace](#native-workspace) . [Quick Start](#quick-start) . [Features](#features) . [Fork Status](FORK.md) . [FAQ](#faq)
 
 </div>
 
@@ -38,8 +38,8 @@ make install
 This fork currently publishes development builds only. Its inherited self-updater,
 release workflow, Homebrew publishing, and upstream feedback submission are disabled.
 
-Then run `agent-deck` for the classic interface or `agent-deck workspace` for the
-new two-pane workspace.
+Then run `agent-deck` for the two-pane workspace. The original full-screen
+management interface remains available with `agent-deck manager`.
 
 <details>
 <summary>Uninstalling</summary>
@@ -53,10 +53,10 @@ See [Troubleshooting](skills/agent-deck/references/troubleshooting.md#uninstalli
 
 </details>
 
-## Native Workspace (experimental)
+## Native Workspace
 
 ```bash
-agent-deck workspace
+agent-deck
 ```
 
 Workspace mode keeps a session navigator visible on the left and attaches the
@@ -64,6 +64,9 @@ selected agent's real tmux terminal on the right. Moving with `j`/`k` or the arr
 keys switches the displayed session without stopping any agent. Press Enter to
 focus the agent, Ctrl+Q to return to the navigator, `m` to open the full manager,
 and `q` to detach the dashboard while leaving every session running.
+
+The selected session's tool, status, and model stay visible at the top of the
+navigator. `agent-deck workspace` is retained as an explicit alias.
 
 Configure the navigator width if desired:
 
@@ -78,7 +81,8 @@ remain alive because they continue to run in their original tmux servers.
 ## Quick Start
 
 ```bash
-agent-deck                        # Launch TUI
+agent-deck                        # Launch two-pane workspace
+agent-deck manager                # Launch classic management TUI
 agent-deck add claude .           # Add this folder with Claude; folder name becomes title
 agent-deck add codex .            # Add this folder with Codex; folder name becomes title
 agent-deck add . -c claude        # Add current dir with Claude

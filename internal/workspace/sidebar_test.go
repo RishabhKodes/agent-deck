@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
 	"os/exec"
 	"strings"
 	"testing"
@@ -124,6 +125,25 @@ func TestSidebarRendersAtPlannedWidthWithSeparateMarkers(t *testing.T) {
 	}
 }
 
+func TestSidebarRendersSelectedSessionSummaryAboveList(t *testing.T) {
+	controller := &fakePaneController{}
+	items := testSidebarItems()
+	items[0].data.ToolOptionsJSON = json.RawMessage(`{"tool":"codex","options":{"model":"gpt-5"}}`)
+	model := newSidebarModel("default", controller, items)
+	model.width = 32
+	model.height = 18
+	view := model.View()
+
+	for _, want := range []string{"Alpha", "CODEX", "Status: ● running", "Model:  GPT 5"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("selected summary missing %q:\n%s", want, view)
+		}
+	}
+	if strings.Index(view, "Status:") > strings.Index(view, "default · workspace") {
+		t.Fatalf("selected summary must be the topmost sidebar section:\n%s", view)
+	}
+}
+
 func TestSidebarQDetachesWithoutQuittingModel(t *testing.T) {
 	controller := &fakePaneController{}
 	model := newSidebarModel("default", controller, testSidebarItems())
@@ -134,5 +154,14 @@ func TestSidebarQDetachesWithoutQuittingModel(t *testing.T) {
 	model.Update(cmd())
 	if controller.detached != 1 {
 		t.Fatalf("detach count = %d, want 1", controller.detached)
+	}
+}
+
+func TestManagerCommandUsesExplicitClassicSubcommand(t *testing.T) {
+	controller := &Controller{binaryPath: "/tmp/agent-deck", profile: "work"}
+	cmd := controller.ManagerCommand()
+	want := "/tmp/agent-deck -p work manager"
+	if got := strings.Join(cmd.Args, " "); got != want {
+		t.Fatalf("manager command = %q, want %q", got, want)
 	}
 }

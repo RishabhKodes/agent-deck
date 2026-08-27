@@ -1,4 +1,4 @@
-// Package workspace implements the experimental two-pane Agent Deck workspace.
+// Package workspace implements the two-pane Agent Deck workspace.
 //
 // Agent processes remain owned by their existing tmux servers. Workspace uses a
 // second, private tmux server only as a compositor: a navigator runs on the left
@@ -35,7 +35,8 @@ const (
 
 var ErrNotRunning = errors.New("workspace is not running")
 
-// LaunchOptions configures the public `agent-deck workspace` command.
+// LaunchOptions configures the default workspace and its explicit
+// `agent-deck workspace` alias.
 type LaunchOptions struct {
 	Profile      string
 	SidebarWidth int
@@ -124,7 +125,7 @@ func Run(ctx context.Context, opts LaunchOptions) error {
 		return err
 	}
 
-	cmd := tmuxCommand(ctx, id.socket, "attach-session", "-d", "-t", id.session)
+	cmd := tmuxCommand(ctx, id.socket, "-u", "attach-session", "-d", "-t", id.session)
 	cmd.Env = withoutEnv(os.Environ(), "TMUX")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -242,7 +243,7 @@ func (c *Controller) Detach(ctx context.Context) error {
 // ManagerCommand returns the unchanged Agent Deck TUI, allowed to run inside
 // the private outer tmux pane. The caller zooms the pane around tea.ExecProcess.
 func (c *Controller) ManagerCommand() *exec.Cmd {
-	cmd := exec.Command(c.binaryPath, "-p", c.profile)
+	cmd := exec.Command(c.binaryPath, "-p", c.profile, "manager")
 	cmd.Env = append(os.Environ(), "AGENT_DECK_ALLOW_OUTER_TMUX=1", "AGENTDECK_SKIP_UPDATE_CHECK=1")
 	return cmd
 }
@@ -307,7 +308,7 @@ func RunViewer(ctx context.Context, profile, instanceID string) error {
 		return holdViewer(fmt.Sprintf("%s is not running\n\nOpen the manager with m to restart it.", target.Title))
 	}
 
-	cmd := adTmux.ExecContext(ctx, target.SocketName, "attach-session", "-t", target.TmuxName)
+	cmd := adTmux.ExecContext(ctx, target.SocketName, "-u", "attach-session", "-t", target.TmuxName)
 	cmd.Env = withoutEnv(os.Environ(), "TMUX", "TMUX_PANE")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
