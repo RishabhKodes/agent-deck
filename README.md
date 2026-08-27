@@ -38,7 +38,7 @@ make install
 This fork currently publishes development builds only. Its inherited self-updater,
 release workflow, Homebrew publishing, and upstream feedback submission are disabled.
 
-Then run `agent-deck` for the two-pane workspace. The original full-screen
+Then run `agent-deck` for the native workspace dashboard. The full-screen
 management interface remains available with `agent-deck manager`.
 
 <details>
@@ -59,20 +59,24 @@ See [Troubleshooting](skills/agent-deck/references/troubleshooting.md#uninstalli
 agent-deck
 ```
 
-Workspace mode keeps a session navigator visible on the left and attaches the
-selected agent's real tmux terminal on the right. Moving with `j`/`k` or the arrow
-keys switches the displayed session without stopping any agent. Press Enter to
-focus the agent, Ctrl+Q to return to the navigator, `m` to open the full manager,
-and `q` to detach the dashboard while leaving every session running.
+Workspace mode mirrors the full manager layout while keeping the selected
+agent's real tmux terminal interactive. A filterable session tree stays visible
+on the left; fleet/system status, selected-session metadata, tool details, MCPs,
+plugins, channels, and supported analytics stay visible around the live output.
+Moving with `j`/`k` or the arrow keys switches sessions without stopping them.
 
-The selected session's tool, status, and model stay visible at the top of the
-navigator. `agent-deck workspace` is retained as an explicit alias.
+Press Enter to focus the agent, Ctrl+Q to return to the navigator, `m` to open
+the full manager, or use `n`, `f`/`F`, `/`, `?`, `S`, `$`, and `t` to open the
+corresponding manager action in place. The `0`, `!`, `@`, `#`, `&`, `%`, and `^`
+keys expose the same session filters as the manager. `q` detaches the dashboard
+while leaving every session running. `agent-deck workspace` is retained as an
+explicit alias.
 
 Configure the navigator width if desired:
 
 ```toml
 [workspace]
-sidebar_width = 32
+sidebar_width = 38
 ```
 
 Use `agent-deck workspace stop` to stop only the outer dashboard. Agent sessions
@@ -81,7 +85,7 @@ remain alive because they continue to run in their original tmux servers.
 ## Quick Start
 
 ```bash
-agent-deck                        # Launch two-pane workspace
+agent-deck                        # Launch native workspace dashboard
 agent-deck manager                # Launch classic management TUI
 agent-deck add claude .           # Add this folder with Claude; folder name becomes title
 agent-deck add codex .            # Add this folder with Codex; folder name becomes title

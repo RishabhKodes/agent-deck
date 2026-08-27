@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The native workspace now mirrors the manager dashboard with fleet and system
+  status, manager filters and actions, a session tree, tool metadata, MCP/plugin/
+  channel details, and supported analytics above the unchanged live tmux output.
+
 ## [1.15.0] - 2026-08-23
 
 Fail-closed inbox delivery, safer session navigation, and CLI parity across ten commits merged after v1.14.0.

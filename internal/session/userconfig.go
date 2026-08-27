@@ -242,7 +242,7 @@ type UserConfig struct {
 	// Web defines `agent-deck web` HTTP server settings.
 	Web WebSettings `toml:"web,omitempty"`
 
-	// Workspace configures the opt-in two-pane native terminal workspace.
+	// Workspace configures the native terminal dashboard.
 	Workspace WorkspaceSettings `toml:"workspace,omitempty"`
 
 	// UI defines TUI layout settings (split ratios, etc).
@@ -451,14 +451,16 @@ type UISettings struct {
 // WorkspaceSettings controls the experimental native terminal workspace.
 type WorkspaceSettings struct {
 	// SidebarWidth is the navigator width in terminal columns. Values outside
-	// 24-60 are clamped; zero preserves the 32-column default.
+	// 24-72 are clamped; zero preserves the 38-column default. The slightly
+	// wider default matches the Sessions pane in the full management TUI and
+	// leaves room for its tree/status vocabulary.
 	SidebarWidth int `toml:"sidebar_width,omitzero"`
 }
 
 const (
-	DefaultWorkspaceSidebarWidth = 32
+	DefaultWorkspaceSidebarWidth = 38
 	MinWorkspaceSidebarWidth     = 24
-	MaxWorkspaceSidebarWidth     = 60
+	MaxWorkspaceSidebarWidth     = 72
 )
 
 // GetSidebarWidth returns the configured workspace navigator width.

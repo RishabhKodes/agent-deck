@@ -1,8 +1,9 @@
-// Package workspace implements the two-pane Agent Deck workspace.
+// Package workspace implements the native Agent Deck dashboard.
 //
 // Agent processes remain owned by their existing tmux servers. Workspace uses a
-// second, private tmux server only as a compositor: a navigator runs on the left
-// and a normal tmux client attached to the selected agent runs on the right.
+// second, private tmux server only as a compositor: a navigator runs on the
+// left, a read-only preview runs at top-right, and a normal tmux client attached
+// to the selected agent remains interactive at bottom-right.
 package workspace
 
 import (
@@ -27,10 +28,13 @@ import (
 )
 
 const (
-	DefaultSidebarWidth = 32
-	MinSidebarWidth     = 24
-	MaxSidebarWidth     = 60
-	minimumAgentWidth   = 40
+	DefaultSidebarWidth    = 38
+	MinSidebarWidth        = 24
+	MaxSidebarWidth        = 72
+	minimumAgentWidth      = 40
+	defaultInspectorHeight = 18
+	minimumInspectorHeight = 10
+	minimumViewerHeight    = 12
 )
 
 var ErrNotRunning = errors.New("workspace is not running")
@@ -45,25 +49,27 @@ type LaunchOptions struct {
 
 // SidebarOptions are passed only to the private navigator subprocess.
 type SidebarOptions struct {
-	Profile      string
-	SidebarWidth int
-	BinaryPath   string
-	OuterSocket  string
-	OuterSession string
-	LeftPane     string
-	RightPane    string
+	Profile       string
+	SidebarWidth  int
+	BinaryPath    string
+	OuterSocket   string
+	OuterSession  string
+	LeftPane      string
+	InspectorPane string
+	RightPane     string
 }
 
-// Controller lets the navigator manipulate only the two outer dashboard
-// panes. It never sends lifecycle commands to an agent's tmux server.
+// Controller lets the navigator manipulate only the outer dashboard panes. It
+// never sends lifecycle commands to an agent's tmux server.
 type Controller struct {
-	actionMu     sync.Mutex
-	profile      string
-	binaryPath   string
-	outerSocket  string
-	outerSession string
-	leftPane     string
-	rightPane    string
+	actionMu      sync.Mutex
+	profile       string
+	binaryPath    string
+	outerSocket   string
+	outerSession  string
+	leftPane      string
+	inspectorPane string
+	rightPane     string
 }
 
 // AttachTarget is the minimum persisted information needed to attach a native
@@ -86,8 +92,9 @@ type dashboardIdentity struct {
 }
 
 type dashboardPanes struct {
-	left  string
-	right string
+	left      string
+	inspector string
+	right     string
 }
 
 // Run creates or repairs a profile-scoped dashboard and attaches the current
@@ -163,7 +170,7 @@ func NewController(opts SidebarOptions) (*Controller, error) {
 	if opts.Profile == "" || opts.BinaryPath == "" || opts.OuterSocket == "" || opts.OuterSession == "" {
 		return nil, errors.New("incomplete workspace sidebar configuration")
 	}
-	if !validPaneID(opts.LeftPane) || !validPaneID(opts.RightPane) {
+	if !validPaneID(opts.LeftPane) || !validPaneID(opts.InspectorPane) || !validPaneID(opts.RightPane) {
 		return nil, errors.New("invalid workspace pane identifier")
 	}
 	want := identityForProfile(opts.Profile)
@@ -171,12 +178,13 @@ func NewController(opts SidebarOptions) (*Controller, error) {
 		return nil, errors.New("workspace identity does not match profile")
 	}
 	return &Controller{
-		profile:      opts.Profile,
-		binaryPath:   opts.BinaryPath,
-		outerSocket:  opts.OuterSocket,
-		outerSession: opts.OuterSession,
-		leftPane:     opts.LeftPane,
-		rightPane:    opts.RightPane,
+		profile:       opts.Profile,
+		binaryPath:    opts.BinaryPath,
+		outerSocket:   opts.OuterSocket,
+		outerSession:  opts.OuterSession,
+		leftPane:      opts.LeftPane,
+		inspectorPane: opts.InspectorPane,
+		rightPane:     opts.RightPane,
 	}, nil
 }
 
@@ -191,6 +199,10 @@ func (c *Controller) ShowInstance(ctx context.Context, instanceID string) error 
 func (c *Controller) showInstance(ctx context.Context, instanceID string) error {
 	if strings.TrimSpace(instanceID) == "" {
 		return c.showPlaceholder(ctx)
+	}
+	inspectorCommand := shellCommand(c.binaryPath, "-p", c.profile, "__workspace-inspector", "--instance", instanceID)
+	if out, err := tmuxCommand(ctx, c.outerSocket, "respawn-pane", "-k", "-t", c.inspectorPane, inspectorCommand).CombinedOutput(); err != nil {
+		return fmt.Errorf("switch workspace inspector: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	command := shellCommand(c.binaryPath, "-p", c.profile, "__workspace-view", "--instance", instanceID)
 	if out, err := tmuxCommand(ctx, c.outerSocket, "respawn-pane", "-k", "-t", c.rightPane, command).CombinedOutput(); err != nil {
@@ -211,6 +223,10 @@ func (c *Controller) ActivateInstance(ctx context.Context, instanceID string) er
 }
 
 func (c *Controller) showPlaceholder(ctx context.Context) error {
+	inspectorCommand := shellCommand(c.binaryPath, "-p", c.profile, "__workspace-inspector")
+	if out, err := tmuxCommand(ctx, c.outerSocket, "respawn-pane", "-k", "-t", c.inspectorPane, inspectorCommand).CombinedOutput(); err != nil {
+		return fmt.Errorf("reset workspace inspector: %w: %s", err, strings.TrimSpace(string(out)))
+	}
 	command := shellCommand(c.binaryPath, "-p", c.profile, "__workspace-view")
 	if out, err := tmuxCommand(ctx, c.outerSocket, "respawn-pane", "-k", "-t", c.rightPane, command).CombinedOutput(); err != nil {
 		return fmt.Errorf("reset workspace viewer: %w: %s", err, strings.TrimSpace(string(out)))
@@ -242,10 +258,35 @@ func (c *Controller) Detach(ctx context.Context) error {
 
 // ManagerCommand returns the unchanged Agent Deck TUI, allowed to run inside
 // the private outer tmux pane. The caller zooms the pane around tea.ExecProcess.
-func (c *Controller) ManagerCommand() *exec.Cmd {
-	cmd := exec.Command(c.binaryPath, "-p", c.profile, "manager")
-	cmd.Env = append(os.Environ(), "AGENT_DECK_ALLOW_OUTER_TMUX=1", "AGENTDECK_SKIP_UPDATE_CHECK=1")
+func (c *Controller) ManagerCommand(instanceID, startupAction string) *exec.Cmd {
+	args := []string{"-p", c.profile, "manager"}
+	if strings.TrimSpace(instanceID) != "" {
+		args = append(args, "--select", instanceID)
+	}
+	cmd := exec.Command(c.binaryPath, args...)
+	cmd.Env = append(os.Environ(),
+		"AGENT_DECK_ALLOW_OUTER_TMUX=1",
+		"AGENTDECK_SKIP_UPDATE_CHECK=1",
+		"AGENTDECK_STARTUP_ACTION="+startupAction,
+	)
 	return cmd
+}
+
+// UpdateChrome redraws the two workspace-wide status rows. The navigator owns
+// the data, while tmux owns the only surface that can span every pane.
+func (c *Controller) UpdateChrome(ctx context.Context, header, filters string) error {
+	c.actionMu.Lock()
+	defer c.actionMu.Unlock()
+	commands := [][]string{
+		{"set-option", "-t", c.outerSession, "status-format[0]", header},
+		{"set-option", "-t", c.outerSession, "status-format[1]", filters},
+	}
+	for _, args := range commands {
+		if out, err := tmuxCommand(ctx, c.outerSocket, args...).CombinedOutput(); err != nil {
+			return fmt.Errorf("update workspace chrome: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+	}
+	return nil
 }
 
 // ClassicAttachCommand is used for remote sessions, which intentionally retain
@@ -390,7 +431,7 @@ func ensureDashboard(ctx context.Context, id dashboardIdentity, profile, binaryP
 	}
 	if hasDashboard(ctx, id) {
 		panes, err := storedPanes(ctx, id)
-		if err == nil && paneExists(ctx, id.socket, panes.left) && paneExists(ctx, id.socket, panes.right) {
+		if err == nil && paneExists(ctx, id.socket, panes.left) && paneExists(ctx, id.socket, panes.inspector) && paneExists(ctx, id.socket, panes.right) {
 			if paneDead(ctx, id.socket, panes.left) {
 				cmd := sidebarCommand(binaryPath, profile, id, panes, width)
 				if out, respawnErr := tmuxCommand(ctx, id.socket, "respawn-pane", "-k", "-t", panes.left, cmd).CombinedOutput(); respawnErr != nil {
@@ -401,6 +442,12 @@ func ensureDashboard(ctx context.Context, id dashboardIdentity, profile, binaryP
 				cmd := viewerCommand(binaryPath, profile, "")
 				if out, respawnErr := tmuxCommand(ctx, id.socket, "respawn-pane", "-k", "-t", panes.right, cmd).CombinedOutput(); respawnErr != nil {
 					return dashboardPanes{}, fmt.Errorf("repair workspace viewer: %w: %s", respawnErr, strings.TrimSpace(string(out)))
+				}
+			}
+			if paneDead(ctx, id.socket, panes.inspector) {
+				cmd := inspectorCommand(binaryPath, profile, "")
+				if out, respawnErr := tmuxCommand(ctx, id.socket, "respawn-pane", "-k", "-t", panes.inspector, cmd).CombinedOutput(); respawnErr != nil {
+					return dashboardPanes{}, fmt.Errorf("repair workspace inspector: %w: %s", respawnErr, strings.TrimSpace(string(out)))
 				}
 			}
 			return panes, nil
@@ -427,7 +474,15 @@ func ensureDashboard(ctx context.Context, id dashboardIdentity, profile, binaryP
 		return dashboardPanes{}, fmt.Errorf("create workspace viewer: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	right := strings.TrimSpace(string(out))
-	panes := dashboardPanes{left: left, right: right}
+	inspectorHeight := clampInspectorHeight(defaultInspectorHeight, rows)
+	inspectorCmd := inspectorCommand(binaryPath, profile, "")
+	out, err = tmuxCommand(ctx, id.socket, "split-window", "-v", "-b", "-l", strconv.Itoa(inspectorHeight), "-P", "-F", "#{pane_id}", "-t", right, inspectorCmd).CombinedOutput()
+	if err != nil {
+		_ = tmuxCommand(ctx, id.socket, "kill-session", "-t", id.session).Run()
+		return dashboardPanes{}, fmt.Errorf("create workspace inspector: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	inspector := strings.TrimSpace(string(out))
+	panes := dashboardPanes{left: left, inspector: inspector, right: right}
 
 	// The first sidebar command used predicted pane IDs. Respawn it with the
 	// actual IDs before exposing the dashboard to a client.
@@ -442,22 +497,32 @@ func ensureDashboard(ctx context.Context, id dashboardIdentity, profile, binaryP
 func configureDashboard(ctx context.Context, id dashboardIdentity, panes dashboardPanes, width int) error {
 	commands := [][]string{
 		{"set-option", "-g", "@agentdeck_workspace_owner", id.owner},
-		{"set-option", "-g", "@agentdeck_workspace_schema", "1"},
-		{"set-option", "-t", id.session, "status", "off"},
+		{"set-option", "-g", "@agentdeck_workspace_schema", "2"},
+		{"set-option", "-t", id.session, "status", "2"},
+		{"set-option", "-t", id.session, "status-position", "top"},
+		{"set-option", "-t", id.session, "status-style", "bg=default,fg=#c0caf5"},
+		{"set-option", "-t", id.session, "status-left", ""},
+		{"set-option", "-t", id.session, "status-right", ""},
 		{"set-option", "-t", id.session, "prefix", "None"},
 		{"set-option", "-t", id.session, "prefix2", "None"},
 		// Mouse selection provides a direct fallback for moving between panes.
 		{"set-option", "-t", id.session, "mouse", "on"},
 		{"set-option", "-t", id.session, "focus-events", "on"},
 		{"set-window-option", "-t", id.session, "remain-on-exit", "on"},
+		{"set-window-option", "-t", id.session, "pane-border-style", "fg=#414868"},
+		{"set-window-option", "-t", id.session, "pane-active-border-style", "fg=#414868"},
 		{"set-option", "-s", "escape-time", "0"},
 		{"set-option", "-g", "default-terminal", "tmux-256color"},
 		{"set-option", "-t", id.session, "@agentdeck_workspace_left", panes.left},
+		{"set-option", "-t", id.session, "@agentdeck_workspace_inspector", panes.inspector},
 		{"set-option", "-t", id.session, "@agentdeck_workspace_right", panes.right},
 		// Ctrl+Q is always a one-way escape hatch to the navigator. Making it
 		// unconditional avoids terminal/input-state differences in placeholders
 		// and nested agent clients.
 		{"bind-key", "-T", "root", "C-q", "select-pane", "-t", panes.left},
+		// tmux preserves the horizontal split as the client changes size. Only
+		// pin the navigator width here: forcing the inspector back to 18 rows on
+		// a compact resize could leave too little room for the live terminal.
 		{"set-hook", "-g", "client-resized", "resize-pane -t " + panes.left + " -x " + strconv.Itoa(width)},
 		{"resize-pane", "-t", panes.left, "-x", strconv.Itoa(width)},
 		{"select-pane", "-t", panes.left},
@@ -479,9 +544,18 @@ func sidebarCommand(binaryPath, profile string, id dashboardIdentity, panes dash
 		"--outer-socket", id.socket,
 		"--outer-session", id.session,
 		"--left-pane", panes.left,
+		"--inspector-pane", panes.inspector,
 		"--right-pane", panes.right,
 		"--sidebar-width", strconv.Itoa(width),
 	)
+}
+
+func inspectorCommand(binaryPath, profile, instanceID string) string {
+	args := []string{"-p", profile, "__workspace-inspector"}
+	if instanceID != "" {
+		args = append(args, "--instance", instanceID)
+	}
+	return shellCommand(binaryPath, args...)
 }
 
 func viewerCommand(binaryPath, profile, instanceID string) string {
@@ -530,11 +604,29 @@ func storedPanes(ctx context.Context, id dashboardIdentity) (dashboardPanes, err
 	if err != nil {
 		return dashboardPanes{}, err
 	}
-	panes := dashboardPanes{left: strings.TrimSpace(string(left)), right: strings.TrimSpace(string(right))}
-	if !validPaneID(panes.left) || !validPaneID(panes.right) {
+	inspector, err := tmuxCommand(ctx, id.socket, "show-options", "-t", id.session, "-qv", "@agentdeck_workspace_inspector").Output()
+	if err != nil {
+		return dashboardPanes{}, err
+	}
+	panes := dashboardPanes{left: strings.TrimSpace(string(left)), inspector: strings.TrimSpace(string(inspector)), right: strings.TrimSpace(string(right))}
+	if !validPaneID(panes.left) || !validPaneID(panes.inspector) || !validPaneID(panes.right) {
 		return dashboardPanes{}, errors.New("invalid stored pane identifiers")
 	}
 	return panes, nil
+}
+
+func clampInspectorHeight(height, total int) int {
+	if height < minimumInspectorHeight {
+		height = minimumInspectorHeight
+	}
+	maxHeight := total - minimumViewerHeight - 3 // two status rows + pane border
+	if maxHeight < minimumInspectorHeight {
+		maxHeight = minimumInspectorHeight
+	}
+	if height > maxHeight {
+		return maxHeight
+	}
+	return height
 }
 
 func paneExists(ctx context.Context, socket, pane string) bool {

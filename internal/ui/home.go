@@ -325,6 +325,8 @@ type Home struct {
 	groupScope          string                // Limit TUI to a specific group path ("" = all groups)
 	initialSelect       string                // Session ID or title to preselect on first load (#709). Does NOT scope groups.
 	initialSelectDone   bool                  // Guard so preselection only fires once
+	startupAction       string                // One-shot manager action requested by the native workspace.
+	startupActionSent   bool                  // Prevents storage reloads from reopening the action.
 	previewMode         PreviewMode           // What to show in preview pane (both, output-only, analytics-only)
 	groupViewMode       session.GroupViewMode // List partition: normal, active-on-top, populated-on-top (cycled by hotkey 't')
 	err                 error
@@ -1224,6 +1226,29 @@ type sessionForkedMsg struct {
 
 type refreshMsg struct{}
 
+type startupActionMsg struct{ key string }
+
+// allowedStartupAction limits the internal workspace handoff to the explicit
+// actions offered by its navigator. Arbitrary environment input must not become
+// a synthesized TUI command (notably d/A/R and other unexposed shortcuts).
+func allowedStartupAction(key string) string {
+	switch key {
+	case "n", "f", "F", "/", "?", "S", "$", "t":
+		return key
+	default:
+		return ""
+	}
+}
+
+func (h *Home) startupActionCmd() tea.Cmd {
+	if h == nil || h.startupAction == "" || h.startupActionSent {
+		return nil
+	}
+	h.startupActionSent = true
+	key := h.startupAction
+	return func() tea.Msg { return startupActionMsg{key: key} }
+}
+
 type statusUpdateMsg struct {
 	attachedSessionID string // Session that just returned from attach (if local attach)
 	attachedWorkDir   string // pane_current_path captured after attach returns
@@ -1555,6 +1580,7 @@ func NewHomeWithProfileAndMode(profile string) *Home {
 		pendingTitleChanges:       make(map[string]pendingTitle),
 		debugMode:                 logging.IsDebugEnabled(),
 		lastClickIndex:            -1,
+		startupAction:             allowedStartupAction(os.Getenv("AGENTDECK_STARTUP_ACTION")),
 	}
 	h.sessionRenderSnapshot.Store(make(map[string]sessionRenderState))
 
@@ -5777,21 +5803,28 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Save after dedup to persist any ID changes (initial load only)
 				h.saveInstances()
 			}
+			startupCmd := h.startupActionCmd()
 			// Trigger immediate preview fetch for initial selection (mutex-protected)
 			if selected := h.getSelectedSession(); selected != nil {
 				h.previewCacheMu.Lock()
 				h.previewFetchingID = selected.ID
 				h.previewCacheMu.Unlock()
 				// Batch preview fetch with any OpenCode detection commands
-				allCmds := append(detectionCmds, h.fetchPreview(selected, selected.ID, -1))
+				allCmds := append(detectionCmds, h.fetchPreview(selected, selected.ID, -1), startupCmd)
 				return h, tea.Batch(allCmds...)
 			}
 			// No selection, but still run detection commands if any
-			if len(detectionCmds) > 0 {
-				return h, tea.Batch(detectionCmds...)
+			if len(detectionCmds) > 0 || startupCmd != nil {
+				return h, tea.Batch(append(detectionCmds, startupCmd)...)
 			}
 		}
 		return h, nil
+
+	case startupActionMsg:
+		if msg.key == "" {
+			return h, nil
+		}
+		return h.handleMainKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(msg.key)})
 
 	case sessionCreatedMsg:
 		uiLog.Info("session_created_msg",

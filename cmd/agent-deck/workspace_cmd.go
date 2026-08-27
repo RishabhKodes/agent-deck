@@ -22,11 +22,11 @@ func handleWorkspace(profile string, args []string) {
 	settings := session.GetWorkspaceSettings()
 	fs := flag.NewFlagSet("workspace", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	sidebarWidth := fs.Int("sidebar-width", settings.GetSidebarWidth(), "Navigator width in columns (24-60)")
+	sidebarWidth := fs.Int("sidebar-width", settings.GetSidebarWidth(), "Navigator width in columns (24-72)")
 	fs.Usage = func() {
 		fmt.Println("Usage: agent-deck [-p profile] workspace [options]")
 		fmt.Println()
-		fmt.Println("Open the native two-pane agent workspace.")
+		fmt.Println("Open the native agent dashboard.")
 		fmt.Println("Ctrl+Q returns to the navigator; q detaches without stopping agents.")
 		fmt.Println()
 		fmt.Println("Options:")
@@ -96,6 +96,7 @@ func handleWorkspaceSidebar(profile string, args []string) {
 	outerSocket := fs.String("outer-socket", "", "internal outer tmux socket")
 	outerSession := fs.String("outer-session", "", "internal outer tmux session")
 	leftPane := fs.String("left-pane", "", "internal navigator pane")
+	inspectorPane := fs.String("inspector-pane", "", "internal inspector pane")
 	rightPane := fs.String("right-pane", "", "internal viewer pane")
 	sidebarWidth := fs.Int("sidebar-width", workspace.DefaultSidebarWidth, "internal navigator width")
 	if err := fs.Parse(args); err != nil {
@@ -109,16 +110,31 @@ func handleWorkspaceSidebar(profile string, args []string) {
 	ctx, cancel := workspaceSignalContext()
 	defer cancel()
 	err = workspace.RunSidebar(ctx, workspace.SidebarOptions{
-		Profile:      profile,
-		SidebarWidth: *sidebarWidth,
-		BinaryPath:   binaryPath,
-		OuterSocket:  *outerSocket,
-		OuterSession: *outerSession,
-		LeftPane:     *leftPane,
-		RightPane:    *rightPane,
+		Profile:       profile,
+		SidebarWidth:  *sidebarWidth,
+		BinaryPath:    binaryPath,
+		OuterSocket:   *outerSocket,
+		OuterSession:  *outerSession,
+		LeftPane:      *leftPane,
+		InspectorPane: *inspectorPane,
+		RightPane:     *rightPane,
 	})
 	if err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintf(os.Stderr, "workspace sidebar: %v\n", err)
+	}
+}
+
+func handleWorkspaceInspector(profile string, args []string) {
+	fs := flag.NewFlagSet("__workspace-inspector", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	instanceID := fs.String("instance", "", "internal Agent Deck instance ID")
+	if err := fs.Parse(args); err != nil {
+		return
+	}
+	ctx, cancel := workspaceSignalContext()
+	defer cancel()
+	if err := workspace.RunInspector(ctx, profile, *instanceID); err != nil && !errors.Is(err, context.Canceled) {
+		fmt.Fprintf(os.Stderr, "workspace inspector: %v\n", err)
 	}
 }
 

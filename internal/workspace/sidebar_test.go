@@ -2,7 +2,6 @@ package workspace
 
 import (
 	"context"
-	"encoding/json"
 	"os/exec"
 	"strings"
 	"testing"
@@ -17,6 +16,7 @@ type fakePaneController struct {
 	activated []string
 	detached  int
 	zooms     []bool
+	chrome    [][2]string
 }
 
 func (f *fakePaneController) ShowInstance(_ context.Context, id string) error {
@@ -34,12 +34,16 @@ func (f *fakePaneController) Detach(context.Context) error {
 	f.detached++
 	return nil
 }
-func (f *fakePaneController) ManagerCommand() *exec.Cmd { return exec.Command("true") }
+func (f *fakePaneController) ManagerCommand(string, string) *exec.Cmd { return exec.Command("true") }
 func (f *fakePaneController) ClassicAttachCommand(string) *exec.Cmd {
 	return exec.Command("true")
 }
 func (f *fakePaneController) SetZoom(_ context.Context, zoom bool) error {
 	f.zooms = append(f.zooms, zoom)
+	return nil
+}
+func (f *fakePaneController) UpdateChrome(_ context.Context, header, filters string) error {
+	f.chrome = append(f.chrome, [2]string{header, filters})
 	return nil
 }
 
@@ -154,27 +158,23 @@ func TestSidebarRendersAtPlannedWidthWithSeparateMarkers(t *testing.T) {
 	if !strings.Contains(view, "Alpha") || !strings.Contains(view, "Beta") {
 		t.Fatalf("expected sessions missing from view:\n%s", view)
 	}
-	if !strings.Contains(view, "●") || !strings.Contains(view, "›") {
+	if !strings.Contains(view, "●") || !strings.Contains(view, "▸") {
 		t.Fatalf("active/cursor markers are not separate:\n%s", view)
 	}
 }
 
-func TestSidebarRendersSelectedSessionSummaryAboveList(t *testing.T) {
+func TestSidebarRendersManagerStyleSessionTree(t *testing.T) {
 	controller := &fakePaneController{}
 	items := testSidebarItems()
-	items[0].data.ToolOptionsJSON = json.RawMessage(`{"tool":"codex","options":{"model":"gpt-5"}}`)
 	model := newSidebarModel("default", controller, items)
 	model.width = 32
 	model.height = 18
 	view := model.View()
 
-	for _, want := range []string{"Alpha", "CODEX", "Status: ● running", "Model:  GPT 5"} {
+	for _, want := range []string{"SESSIONS", "1·▾", "Alpha", "codex", "Beta", "claude"} {
 		if !strings.Contains(view, want) {
-			t.Fatalf("selected summary missing %q:\n%s", want, view)
+			t.Fatalf("manager-style tree missing %q:\n%s", want, view)
 		}
-	}
-	if strings.Index(view, "Status:") > strings.Index(view, "default · workspace") {
-		t.Fatalf("selected summary must be the topmost sidebar section:\n%s", view)
 	}
 }
 
@@ -193,9 +193,75 @@ func TestSidebarQDetachesWithoutQuittingModel(t *testing.T) {
 
 func TestManagerCommandUsesExplicitClassicSubcommand(t *testing.T) {
 	controller := &Controller{binaryPath: "/tmp/agent-deck", profile: "work"}
-	cmd := controller.ManagerCommand()
-	want := "/tmp/agent-deck -p work manager"
+	cmd := controller.ManagerCommand("session-id", "F")
+	want := "/tmp/agent-deck -p work manager --select session-id"
 	if got := strings.Join(cmd.Args, " "); got != want {
 		t.Fatalf("manager command = %q, want %q", got, want)
+	}
+	if got := strings.Join(cmd.Env, "\n"); !strings.Contains(got, "AGENTDECK_STARTUP_ACTION=F") {
+		t.Fatalf("manager command missing startup action: %s", got)
+	}
+}
+
+func TestSidebarFiltersMatchManagerShortcuts(t *testing.T) {
+	controller := &fakePaneController{}
+	model := newSidebarModel("default", controller, testSidebarItems())
+	if len(model.items) != 3 {
+		t.Fatalf("all view items = %d, want 3", len(model.items))
+	}
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'@'}})
+	if cmd == nil || len(model.items) != 1 || model.items[0].data.Title != "Beta" {
+		t.Fatalf("waiting filter = %#v", model.items)
+	}
+	model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'0'}})
+	if len(model.items) != 3 {
+		t.Fatalf("cleared filter items = %d, want 3", len(model.items))
+	}
+}
+
+func TestSidebarAcceptsBubbleTeaShiftFilterNames(t *testing.T) {
+	model := newSidebarModel("default", &fakePaneController{}, testSidebarItems())
+	model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'!'}})
+	if len(model.items) != 1 || model.items[0].data.Title != "Alpha" {
+		t.Fatalf("running filter = %#v", model.items)
+	}
+	model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'!'}})
+	if model.filter != workspaceFilterAll {
+		t.Fatalf("second running shortcut did not toggle back to all: %q", model.filter)
+	}
+}
+
+func TestSessionRefreshUpdatesChromeWhileSwitching(t *testing.T) {
+	controller := &fakePaneController{}
+	model := newSidebarModel("default", controller, testSidebarItems())
+	model.activeKey = "stale"
+	_, cmd := model.Update(sessionsLoadedMsg{items: testSidebarItems()})
+	if cmd == nil {
+		t.Fatal("refresh did not schedule work")
+	}
+	msg := cmd()
+	if _, ok := msg.(tea.BatchMsg); !ok {
+		t.Fatalf("refresh command = %T, want tea.BatchMsg with switch and chrome updates", msg)
+	}
+}
+
+func TestSidebarChromeContainsFleetCountsAndFilters(t *testing.T) {
+	model := newSidebarModel("default", &fakePaneController{}, testSidebarItems())
+	header, filters := model.chrome()
+	for _, want := range []string{"Agent Deck", "1 running", "1 waiting"} {
+		if !strings.Contains(header, want) {
+			t.Fatalf("header missing %q: %s", want, header)
+		}
+	}
+	for _, want := range []string{"ALL", "!@##& filter", "%% open", "^ archived"} {
+		if !strings.Contains(filters, want) {
+			t.Fatalf("filters missing %q: %s", want, filters)
+		}
+	}
+}
+
+func TestEscapeTmuxTextPreservesLiteralFormatCharacters(t *testing.T) {
+	if got := escapeTmuxText("CPU 80% #1"); got != "CPU 80%% ##1" {
+		t.Fatalf("escapeTmuxText() = %q", got)
 	}
 }
