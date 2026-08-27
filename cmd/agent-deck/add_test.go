@@ -4,10 +4,48 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/RishabhKodes/agent-deck/internal/session"
 )
+
+func TestExpandAddToolShorthand(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "claude current directory",
+			args: []string{"claude", "."},
+			want: []string{"-c", "claude", "."},
+		},
+		{
+			name: "codex absolute directory with options",
+			args: []string{"codex", "/tmp/project", "--model", "gpt-5.5"},
+			want: []string{"-c", "codex", "/tmp/project", "--model", "gpt-5.5"},
+		},
+		{
+			name: "ordinary path remains unchanged",
+			args: []string{"./claude-project"},
+			want: []string{"./claude-project"},
+		},
+		{
+			name: "existing flag form remains unchanged",
+			args: []string{"-c", "claude", "."},
+			want: []string{"-c", "claude", "."},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := expandAddToolShorthand(tt.args); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("expandAddToolShorthand(%q) = %q, want %q", tt.args, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestApplyCLIYoloOverride(t *testing.T) {
 	t.Run("enabled for gemini sets override", func(t *testing.T) {

@@ -79,6 +79,8 @@ remain alive because they continue to run in their original tmux servers.
 
 ```bash
 agent-deck                        # Launch TUI
+agent-deck add claude .           # Add this folder with Claude; folder name becomes title
+agent-deck add codex .            # Add this folder with Codex; folder name becomes title
 agent-deck add . -c claude        # Add current dir with Claude
 agent-deck session fork my-proj   # Fork a supported session
 agent-deck session send my-proj --message-file task.md # Send a multiline prompt

@@ -1313,6 +1313,25 @@ func shouldLockTitle(userProvidedTitle, titleLockFlag, noTitleSyncFlag bool) boo
 	return userProvidedTitle || titleLockFlag || noTitleSyncFlag
 }
 
+// expandAddToolShorthand turns the two common positional forms
+//
+//	agent-deck add claude .
+//	agent-deck add codex  .
+//
+// into the existing -c form before flag parsing. Only these two exact tool
+// names are reserved; every other first positional argument remains a path.
+// Keeping this as a syntactic expansion means title derivation, validation,
+// profiles, and session persistence continue through the normal add path.
+func expandAddToolShorthand(args []string) []string {
+	if len(args) == 0 || (args[0] != "claude" && args[0] != "codex") {
+		return args
+	}
+	expanded := make([]string, 0, len(args)+1)
+	expanded = append(expanded, "-c", args[0])
+	expanded = append(expanded, args[1:]...)
+	return expanded
+}
+
 // handleAdd adds a new session from CLI
 func handleAdd(profile string, args []string) {
 	fs := flag.NewFlagSet("add", flag.ExitOnError)
@@ -1418,7 +1437,7 @@ func handleAdd(profile string, args []string) {
 	account := fs.String("account", "", "Named account slot (resolves via [profiles.<account>.claude].config_dir; #924)")
 
 	fs.Usage = func() {
-		fmt.Println("Usage: agent-deck add [path] [options]")
+		fmt.Println("Usage: agent-deck add [claude|codex] [path] [options]")
 		fmt.Println()
 		fmt.Println("Add a new session to Agent Deck.")
 		fmt.Println()
@@ -1431,6 +1450,8 @@ func handleAdd(profile string, args []string) {
 		fmt.Println()
 		fmt.Println("Examples:")
 		fmt.Println("  agent-deck add                       # Use current directory")
+		fmt.Println("  agent-deck add claude .              # Claude; title defaults to folder name")
+		fmt.Println("  agent-deck add codex .               # Codex; title defaults to folder name")
 		fmt.Println("  agent-deck add /path/to/project")
 		fmt.Println("  agent-deck add -t \"My Project\" -g \"work\"")
 		fmt.Println("  agent-deck add -c claude .")
@@ -1476,6 +1497,7 @@ func handleAdd(profile string, args []string) {
 		os.Exit(1)
 	}
 
+	args = expandAddToolShorthand(args)
 	args = reorderArgsForFlagParsing(args)
 
 	if err := fs.Parse(normalizeArgs(fs, args)); err != nil {
