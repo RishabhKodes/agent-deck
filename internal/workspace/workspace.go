@@ -446,14 +446,18 @@ func configureDashboard(ctx context.Context, id dashboardIdentity, panes dashboa
 		{"set-option", "-t", id.session, "status", "off"},
 		{"set-option", "-t", id.session, "prefix", "None"},
 		{"set-option", "-t", id.session, "prefix2", "None"},
-		{"set-option", "-t", id.session, "mouse", "off"},
+		// Mouse selection provides a direct fallback for moving between panes.
+		{"set-option", "-t", id.session, "mouse", "on"},
 		{"set-option", "-t", id.session, "focus-events", "on"},
 		{"set-window-option", "-t", id.session, "remain-on-exit", "on"},
 		{"set-option", "-s", "escape-time", "0"},
 		{"set-option", "-g", "default-terminal", "tmux-256color"},
 		{"set-option", "-t", id.session, "@agentdeck_workspace_left", panes.left},
 		{"set-option", "-t", id.session, "@agentdeck_workspace_right", panes.right},
-		{"bind-key", "-T", "root", "C-q", "if-shell", "-F", fmt.Sprintf("#{==:#{pane_id},%s}", panes.right), "select-pane -t " + panes.left, "send-keys -t " + panes.left + " C-q"},
+		// Ctrl+Q is always a one-way escape hatch to the navigator. Making it
+		// unconditional avoids terminal/input-state differences in placeholders
+		// and nested agent clients.
+		{"bind-key", "-T", "root", "C-q", "select-pane", "-t", panes.left},
 		{"set-hook", "-g", "client-resized", "resize-pane -t " + panes.left + " -x " + strconv.Itoa(width)},
 		{"resize-pane", "-t", panes.left, "-x", strconv.Itoa(width)},
 		{"select-pane", "-t", panes.left},

@@ -166,6 +166,14 @@ func (m *sidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if item == nil {
 				return m, nil
 			}
+			// A placeholder has nothing interactive to focus. Keeping keyboard
+			// focus in the navigator avoids trapping arrow keys in a stopped,
+			// archived, remote, or otherwise unavailable session pane.
+			if !sessionCanAcceptFocus(item.data) {
+				m.busy = ""
+				m.err = nil
+				return m, nil
+			}
 			m.busy = "opening " + item.data.Title
 			return m, m.focusSelectedCmd(*item)
 		case "m", "n":
@@ -386,6 +394,18 @@ func selectedModelLabel(inst *session.InstanceData) string {
 		modelID = inst.GeminiModel
 	}
 	return session.ParseModelID(modelID).Display()
+}
+
+func sessionCanAcceptFocus(inst *session.InstanceData) bool {
+	if inst == nil || !inst.ArchivedAt.IsZero() || strings.TrimSpace(inst.SSHHost) != "" || strings.TrimSpace(inst.TmuxSession) == "" {
+		return false
+	}
+	switch inst.Status {
+	case session.StatusStopped, session.StatusError:
+		return false
+	default:
+		return true
+	}
 }
 
 func (m *sidebarModel) selected() *sidebarItem {

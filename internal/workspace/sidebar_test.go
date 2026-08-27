@@ -93,6 +93,40 @@ func TestSidebarEnterAtomicallyActivatesHighlightedSession(t *testing.T) {
 	}
 }
 
+func TestSidebarEnterKeepsFocusForStoppedSession(t *testing.T) {
+	controller := &fakePaneController{}
+	model := newSidebarModel("default", controller, testSidebarItems())
+	model.cursor = 2
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatal("Enter on a stopped session must not produce a focus command")
+	}
+	if len(controller.activated) != 0 {
+		t.Fatalf("stopped session was activated: %v", controller.activated)
+	}
+}
+
+func TestSessionCanAcceptFocus(t *testing.T) {
+	tests := []struct {
+		name string
+		inst *session.InstanceData
+		want bool
+	}{
+		{name: "running", inst: &session.InstanceData{Status: session.StatusRunning, TmuxSession: "agentdeck_a"}, want: true},
+		{name: "waiting", inst: &session.InstanceData{Status: session.StatusWaiting, TmuxSession: "agentdeck_a"}, want: true},
+		{name: "stopped", inst: &session.InstanceData{Status: session.StatusStopped, TmuxSession: "agentdeck_a"}},
+		{name: "missing tmux", inst: &session.InstanceData{Status: session.StatusRunning}},
+		{name: "remote", inst: &session.InstanceData{Status: session.StatusRunning, TmuxSession: "agentdeck_a", SSHHost: "host"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sessionCanAcceptFocus(tt.inst); got != tt.want {
+				t.Fatalf("sessionCanAcceptFocus() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSidebarStatusChangesDoNotReconnectNativeClient(t *testing.T) {
 	inst := &session.InstanceData{ID: "a", TmuxSession: "agentdeck_a", Status: session.StatusRunning}
 	before := attachKey(inst)
