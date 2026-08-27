@@ -256,22 +256,6 @@ func (c *Controller) Detach(ctx context.Context) error {
 	return nil
 }
 
-// ManagerCommand returns the unchanged Agent Deck TUI, allowed to run inside
-// the private outer tmux pane. The caller zooms the pane around tea.ExecProcess.
-func (c *Controller) ManagerCommand(instanceID, startupAction string) *exec.Cmd {
-	args := []string{"-p", c.profile, "manager"}
-	if strings.TrimSpace(instanceID) != "" {
-		args = append(args, "--select", instanceID)
-	}
-	cmd := exec.Command(c.binaryPath, args...)
-	cmd.Env = append(os.Environ(),
-		"AGENT_DECK_ALLOW_OUTER_TMUX=1",
-		"AGENTDECK_SKIP_UPDATE_CHECK=1",
-		"AGENTDECK_STARTUP_ACTION="+startupAction,
-	)
-	return cmd
-}
-
 // UpdateChrome redraws the two workspace-wide status rows. The navigator owns
 // the data, while tmux owns the only surface that can span every pane.
 func (c *Controller) UpdateChrome(ctx context.Context, header, filters string) error {
@@ -285,31 +269,6 @@ func (c *Controller) UpdateChrome(ctx context.Context, header, filters string) e
 		if out, err := tmuxCommand(ctx, c.outerSocket, args...).CombinedOutput(); err != nil {
 			return fmt.Errorf("update workspace chrome: %w: %s", err, strings.TrimSpace(string(out)))
 		}
-	}
-	return nil
-}
-
-// ClassicAttachCommand is used for remote sessions, which intentionally retain
-// the existing full-screen attach path in workspace v1.
-func (c *Controller) ClassicAttachCommand(instanceID string) *exec.Cmd {
-	cmd := exec.Command(c.binaryPath, "-p", c.profile, "session", "attach", instanceID)
-	cmd.Env = append(os.Environ(), "AGENT_DECK_ALLOW_OUTER_TMUX=1", "AGENTDECK_SKIP_UPDATE_CHECK=1")
-	return cmd
-}
-
-func (c *Controller) SetZoom(ctx context.Context, zoomed bool) error {
-	// tmux -Z toggles, so query first and make this operation idempotent.
-	out, err := tmuxCommand(ctx, c.outerSocket, "display-message", "-p", "-t", c.leftPane, "#{window_zoomed_flag}").Output()
-	if err != nil {
-		return err
-	}
-	isZoomed := strings.TrimSpace(string(out)) == "1"
-	if isZoomed == zoomed {
-		return nil
-	}
-	args := []string{"resize-pane", "-t", c.leftPane, "-Z"}
-	if out, err := tmuxCommand(ctx, c.outerSocket, args...).CombinedOutput(); err != nil {
-		return fmt.Errorf("change workspace zoom: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

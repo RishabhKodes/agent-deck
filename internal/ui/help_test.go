@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-func TestHelpOverlayQuickStartUsesCanonicalRecoveryAndDetachNames(t *testing.T) {
+func TestHelpOverlayQuickStartUsesUnifiedOutputNames(t *testing.T) {
 	overlay := NewHelpOverlay()
 	overlay.SetSize(100, 120)
 	overlay.Show()
 
 	view := overlay.View()
-	for _, want := range []string{"QUICK START", "R", "Restart selected session", "Ctrl+Q", "Detach from session"} {
+	for _, want := range []string{"QUICK START", "R", "Restart selected session", "Enter", "Interact with selected session in Output", "Esc", "Return from Output to navigation"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("help Quick Start missing %q, got %q", want, view)
 		}

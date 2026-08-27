@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -15,6 +16,20 @@ func TestTmuxAvailable(t *testing.T) {
 	_, err := exec.LookPath("tmux")
 	if err != nil {
 		t.Skip("tmux not available - skipping test")
+	}
+}
+
+func TestStripUnifiedDashboardAlias(t *testing.T) {
+	for _, alias := range []string{"workspace", "manager"} {
+		got := stripUnifiedDashboardAlias([]string{alias, "--select", "session-1"})
+		want := []string{"--select", "session-1"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("stripUnifiedDashboardAlias(%q) = %v, want %v", alias, got, want)
+		}
+	}
+	original := []string{"add", "."}
+	if got := stripUnifiedDashboardAlias(original); !reflect.DeepEqual(got, original) {
+		t.Fatalf("non-dashboard command changed: %v", got)
 	}
 }
 
@@ -100,11 +115,11 @@ func TestNestedSessionAllowsCLICommands(t *testing.T) {
 		}
 	})
 
-	// No args (workspace mode) with profile flag should leave empty args.
-	t.Run("profile_flag_only_triggers_workspace", func(t *testing.T) {
+	// No args (unified dashboard) with profile flag should leave empty args.
+	t.Run("profile_flag_only_triggers_dashboard", func(t *testing.T) {
 		_, args := extractProfileFlag([]string{"-p", "work"})
 		if len(args) != 0 {
-			t.Errorf("expected empty args for workspace mode with profile flag, got %v", args)
+			t.Errorf("expected empty args for dashboard mode with profile flag, got %v", args)
 		}
 	})
 }

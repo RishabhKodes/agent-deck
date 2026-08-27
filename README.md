@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/License-MIT-9ece6a?style=for-the-badge&labelColor=1a1b26)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20WSL-7aa2f7?style=for-the-badge&labelColor=1a1b26)](https://github.com/RishabhKodes/agent-deck)
 
-[Install](#installation) . [Native Workspace](#native-workspace) . [Quick Start](#quick-start) . [Features](#features) . [Fork Status](FORK.md) . [FAQ](#faq)
+[Install](#installation) . [Unified Dashboard](#unified-dashboard) . [Quick Start](#quick-start) . [Features](#features) . [Fork Status](FORK.md) . [FAQ](#faq)
 
 </div>
 
@@ -38,8 +38,8 @@ make install
 This fork currently publishes development builds only. Its inherited self-updater,
 release workflow, Homebrew publishing, and upstream feedback submission are disabled.
 
-Then run `agent-deck` for the native workspace dashboard. The full-screen
-management interface remains available with `agent-deck manager`.
+Then run `agent-deck` for the unified dashboard. Session management, live
+output, and prompt input all stay on that one screen.
 
 <details>
 <summary>Uninstalling</summary>
@@ -53,40 +53,32 @@ See [Troubleshooting](skills/agent-deck/references/troubleshooting.md#uninstalli
 
 </details>
 
-## Native Workspace
+## Unified Dashboard
 
 ```bash
 agent-deck
 ```
 
-Workspace mode mirrors the full manager layout while keeping the selected
-agent's real tmux terminal interactive. A filterable session tree stays visible
-on the left; fleet/system status, selected-session metadata, tool details, MCPs,
-plugins, channels, and supported analytics stay visible around the live output.
-Moving with `j`/`k` or the arrow keys switches sessions without stopping them.
+The session tree stays visible on the left while the selected agent's live
+terminal appears in **Output**. Move with `j`/`k` or the arrow keys, then press
+`Enter` (or click the Output pane) to type directly into that agent. Press
+`Enter` to submit a prompt and `Esc` to return to list navigation. No manager,
+workspace, attach, or native-terminal window replaces the dashboard.
 
-Press Enter to focus the agent, Ctrl+Q to return to the navigator, `m` to open
-the full manager, or use `n`, `f`/`F`, `/`, `?`, `S`, `$`, and `t` to open the
-corresponding manager action in place. The `0`, `!`, `@`, `#`, `&`, `%`, and `^`
-keys expose the same session filters as the manager. `q` detaches the dashboard
-while leaving every session running. `agent-deck workspace` is retained as an
-explicit alias.
+Session actions are overlays on this same screen: `n` opens New Session, `m`
+opens MCP Manager, and `f`/`F`, `/`, `?`, `S`, `$`, and `t` expose their usual
+actions without leaving the dashboard. `agent-deck workspace` and
+`agent-deck manager` are compatibility aliases for the exact same UI.
 
-Configure the navigator width if desired:
-
-```toml
-[workspace]
-sidebar_width = 38
-```
-
-Use `agent-deck workspace stop` to stop only the outer dashboard. Agent sessions
-remain alive because they continue to run in their original tmux servers.
+`agent-deck workspace stop` remains available only to clean up an outer
+workspace left running by an older build; managed agent sessions are unchanged.
 
 ## Quick Start
 
 ```bash
-agent-deck                        # Launch native workspace dashboard
-agent-deck manager                # Launch classic management TUI
+agent-deck                        # Launch the unified dashboard
+agent-deck manager                # Compatibility alias for the same dashboard
+agent-deck workspace              # Compatibility alias for the same dashboard
 agent-deck add claude .           # Add this folder with Claude; folder name becomes title
 agent-deck add codex .            # Add this folder with Codex; folder name becomes title
 agent-deck add . -c claude        # Add current dir with Claude
@@ -104,8 +96,8 @@ agent-deck web                    # Start web UI on http://127.0.0.1:8420
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Attach to session |
-| `Ctrl+Q` | Detach from session |
+| `Enter` | Interact in Output / submit prompt |
+| `Esc` | Return from Output to navigation |
 | `n` | New session |
 | `f` / `F` | Fork (quick / dialog) |
 | `A` / `Shift+U` | Archive / unarchive session |

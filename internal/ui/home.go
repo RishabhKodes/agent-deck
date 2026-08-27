@@ -44,7 +44,6 @@ import (
 	"github.com/RishabhKodes/agent-deck/internal/session"
 	"github.com/RishabhKodes/agent-deck/internal/statedb"
 	"github.com/RishabhKodes/agent-deck/internal/sysinfo"
-	"github.com/RishabhKodes/agent-deck/internal/terminal"
 	"github.com/RishabhKodes/agent-deck/internal/tmux"
 	"github.com/RishabhKodes/agent-deck/internal/update"
 	"github.com/RishabhKodes/agent-deck/internal/vcs"
@@ -325,8 +324,6 @@ type Home struct {
 	groupScope          string                // Limit TUI to a specific group path ("" = all groups)
 	initialSelect       string                // Session ID or title to preselect on first load (#709). Does NOT scope groups.
 	initialSelectDone   bool                  // Guard so preselection only fires once
-	startupAction       string                // One-shot manager action requested by the native workspace.
-	startupActionSent   bool                  // Prevents storage reloads from reopening the action.
 	previewMode         PreviewMode           // What to show in preview pane (both, output-only, analytics-only)
 	groupViewMode       session.GroupViewMode // List partition: normal, active-on-top, populated-on-top (cycled by hotkey 't')
 	err                 error
@@ -400,6 +397,11 @@ type Home struct {
 	// synthetic UI buckets, not rows in groupTree, so they need their own
 	// store rather than groupTree's expanded flags.
 	remoteGroupsCollapsed map[string]bool
+	// A remote session created from the dashboard is selected and activated
+	// after the next remote-list refresh, so creation never hands control to a
+	// separate SSH attach screen.
+	pendingRemoteOutputName string
+	pendingRemoteOutputID   string
 
 	// Manual order of remote session rows (#1875): remote -> group path ->
 	// session IDs. Remote rows are not Instances in groupTree, so shift+up/down
@@ -558,9 +560,9 @@ type Home struct {
 	footerMode string
 
 	// attachOnCreate, when true, makes creating a session via the new-session
-	// dialog attach to the new session's pane immediately instead of only
-	// moving the cursor to it (config.toml [ui] attach_on_create). Default
-	// false: today's select-only behavior. See sessionCreatedMsg handling.
+	// dialog activate its Output pane immediately instead of only moving the
+	// cursor to it (config.toml [ui] attach_on_create). Default false: today's
+	// select-only behavior. See sessionCreatedMsg handling.
 	attachOnCreate bool
 
 	// Performance observability (debug mode only, zero cost when off)
@@ -729,16 +731,6 @@ type Home struct {
 	// after an insert keystroke (#1131). Only one tick is in flight at a time;
 	// see scheduleInsertPreviewRefresh.
 	insertPreviewRefreshPending bool
-	// openInNewWindowSink is an optional override used by tests to capture
-	// Shift+Enter dispatches without spawning a real iTerm2 window. When
-	// nil, the dispatch calls terminal.OpenSessionInNewWindow directly.
-	// See issue #1093.
-	openInNewWindowSink func(req terminal.AttachRequest) error
-	// openInSplitPaneSink is an optional override used by tests to capture
-	// open_shell_here dispatches without spawning a real iTerm2 split pane.
-	// When nil, the dispatch calls terminal.OpenSessionInSplitPane directly.
-	// See issue #1470.
-	openInSplitPaneSink func(req terminal.AttachRequest) error
 	// quickApproveSink is an optional override used by tests to capture the
 	// quick-approve (`a`) dispatch — the (instance, windowIndex) it would send
 	// "1"+Enter to — without driving real tmux. windowIndex < 0 means the
@@ -886,23 +878,6 @@ func (h *Home) syncStatusHints(bindings map[string]string) {
 	)
 }
 
-// openInNewWindow dispatches the Shift+Enter new-window launch through an
-// optional test sink, or falls back to the real terminal launcher.
-//
-// The sessionExists flag short-circuits the real launcher for dead sessions
-// — opening a fresh iTerm2 window only to land on a "tmux: no such session"
-// error is worse UX than a silent no-op. The sink path skips this guard so
-// tests can pin the dispatch without faking tmux state. Issue #1093.
-func (h *Home) openInNewWindow(req terminal.AttachRequest, sessionExists bool) error {
-	if h.openInNewWindowSink != nil {
-		return h.openInNewWindowSink(req)
-	}
-	if !sessionExists {
-		return nil
-	}
-	return terminal.OpenSessionInNewWindow(req)
-}
-
 // quickApprove delivers "1"+Enter to approve a Claude permission prompt without
 // attaching. windowIndex < 0 targets the session's active window (the
 // session-row path); >= 0 targets that specific tmux window (the window-row
@@ -942,49 +917,9 @@ func (h *Home) openPromptInput(inst *session.Instance) {
 	h.promptInputDialog.Show(inst.ID, inst.Title)
 }
 
-// resolveITermOpenAs reads the [ui] iterm_open_as setting from the user
-// config, returning "tab" by default if the config can't be loaded or
-// the value is unset/unknown. Issue #1100.
-func resolveITermOpenAs() string {
-	cfg, err := session.LoadUserConfig()
-	if err != nil || cfg == nil {
-		return session.DefaultITermOpenAs
-	}
-	return cfg.UI.GetITermOpenAs()
-}
-
-// openInSplitPane dispatches the open_shell_here iTerm2 split pane launch
-// through an optional test sink, or falls back to the real terminal launcher.
-// Issue #1470.
-func (h *Home) openInSplitPane(req terminal.AttachRequest) error {
-	if h.openInSplitPaneSink != nil {
-		return h.openInSplitPaneSink(req)
-	}
-	return terminal.OpenSessionInSplitPane(req)
-}
-
-// resolveShellSplitMode returns session.ShellSplitITerm when an iTerm2 split
-// should be used, session.ShellSplitTmux otherwise. Reads [ui].shell_split
-// first; falls back to auto-detection via TERM_PROGRAM / LC_TERMINAL. Issue #1470.
-func resolveShellSplitMode() string {
-	cfg, _ := session.LoadUserConfig()
-	if cfg != nil {
-		mode := cfg.UI.GetShellSplit()
-		if mode == session.ShellSplitITerm || mode == session.ShellSplitTmux {
-			return mode
-		}
-	}
-	if os.Getenv("LC_TERMINAL") == "iTerm2" || os.Getenv("TERM_PROGRAM") == "iTerm.app" {
-		return session.ShellSplitITerm
-	}
-	return session.ShellSplitTmux
-}
-
 // openShellHere adds a vertical shell pane to the focused session's tmux
-// session (split-window -h), then opens the session in an iTerm2 split pane
-// or attaches inline depending on resolveShellSplitMode. The shell lands
-// in the session's worktree (or project path), so the user sees [agent | shell]
-// side-by-side without detaching from agent-deck. Issue #1470.
+// session and keeps interaction inside the dashboard Output panel. The shell
+// lands in the session's worktree (or project path).
 func (h *Home) openShellHere(inst *session.Instance) tea.Cmd {
 	tmuxSess := inst.GetTmuxSession()
 	if tmuxSess == nil {
@@ -994,28 +929,14 @@ func (h *Home) openShellHere(inst *session.Instance) tea.Cmd {
 	if workdir == "" {
 		workdir = inst.ProjectPath
 	}
-	req := terminal.AttachRequest{
-		Name:       tmuxSess.Name,
-		SocketName: tmuxSess.SocketName,
-	}
-	if resolveShellSplitMode() == session.ShellSplitITerm {
-		// Launch iTerm2 split before mutating tmux so a failed osascript
-		// call does not leave an orphaned pane. Issue #1470.
-		if err := h.openInSplitPane(req); err != nil {
-			h.setError(fmt.Errorf("open shell here: iterm split: %w", err))
-			return nil
-		}
-		if err := tmuxSess.SplitShellPane(workdir); err != nil {
-			h.setError(fmt.Errorf("open shell here: %w", err))
-		}
-		return nil
-	}
-	// Default (tmux): split first, then attach so the split is visible.
 	if err := tmuxSess.SplitShellPane(workdir); err != nil {
 		h.setError(fmt.Errorf("open shell here: %w", err))
 		return nil
 	}
-	return h.attachSession(inst)
+	if h.enterInsertMode() {
+		return h.fetchSelectedPreview()
+	}
+	return nil
 }
 
 // collapseOrNavUp implements the "h"/"left" collapse-or-parent navigation:
@@ -1071,33 +992,6 @@ func (h *Home) collapseOrNavUp() {
 	if collapsed {
 		h.saveGroupState()
 	}
-}
-
-// buildRemoteAttachRequest constructs a terminal.AttachRequest that
-// runs `agent-deck session attach <id>` over SSH on the named remote.
-// Returns ok=false when the remote can't be resolved from user config or
-// is missing a host. Issue #1100.
-func buildRemoteAttachRequest(remoteName, sessionID, openAs string) (terminal.AttachRequest, bool) {
-	if remoteName == "" || sessionID == "" {
-		return terminal.AttachRequest{}, false
-	}
-	cfg, err := session.LoadUserConfig()
-	if err != nil || cfg == nil || cfg.Remotes == nil {
-		return terminal.AttachRequest{}, false
-	}
-	rc, ok := cfg.Remotes[remoteName]
-	if !ok || rc.Host == "" {
-		return terminal.AttachRequest{}, false
-	}
-	return terminal.AttachRequest{
-		Name:   sessionID,
-		OpenAs: openAs,
-		Remote: &terminal.RemoteAttach{
-			Host:          rc.Host,
-			AgentDeckPath: rc.GetAgentDeckPath(),
-			Profile:       rc.GetProfile(),
-		},
-	}, true
 }
 
 func (h *Home) normalizeMainKey(pressed string) string {
@@ -1225,29 +1119,6 @@ type sessionForkedMsg struct {
 }
 
 type refreshMsg struct{}
-
-type startupActionMsg struct{ key string }
-
-// allowedStartupAction limits the internal workspace handoff to the explicit
-// actions offered by its navigator. Arbitrary environment input must not become
-// a synthesized TUI command (notably d/A/R and other unexposed shortcuts).
-func allowedStartupAction(key string) string {
-	switch key {
-	case "n", "f", "F", "/", "?", "S", "$", "t":
-		return key
-	default:
-		return ""
-	}
-}
-
-func (h *Home) startupActionCmd() tea.Cmd {
-	if h == nil || h.startupAction == "" || h.startupActionSent {
-		return nil
-	}
-	h.startupActionSent = true
-	key := h.startupAction
-	return func() tea.Msg { return startupActionMsg{key: key} }
-}
 
 type statusUpdateMsg struct {
 	attachedSessionID string // Session that just returned from attach (if local attach)
@@ -1580,7 +1451,6 @@ func NewHomeWithProfileAndMode(profile string) *Home {
 		pendingTitleChanges:       make(map[string]pendingTitle),
 		debugMode:                 logging.IsDebugEnabled(),
 		lastClickIndex:            -1,
-		startupAction:             allowedStartupAction(os.Getenv("AGENTDECK_STARTUP_ACTION")),
 	}
 	h.sessionRenderSnapshot.Store(make(map[string]sessionRenderState))
 
@@ -2038,8 +1908,9 @@ func (h *Home) SelectSessionByID(id string) bool {
 // It is called once per tick. The row is cleared unconditionally (consume-once)
 // so an unknown, stale, or foreign id never re-fires on a later tick or lingers
 // past its purpose. It returns a non-nil tea.Cmd only when the request asked to
-// --attach the session and that session is live: the caller runs the cmd to
-// open it (the same path as pressing Enter). A select-only request returns nil.
+// --attach the session and that session is live: the caller activates in-place
+// Output interaction (the same path as pressing Enter). A select-only request
+// returns nil.
 func (h *Home) consumeFocusRequest(db *statedb.StateDB) tea.Cmd {
 	if db == nil {
 		return nil
@@ -2062,18 +1933,16 @@ func (h *Home) consumeFocusRequest(db *statedb.StateDB) tea.Cmd {
 	if !attach {
 		return nil
 	}
-	// Attach intent: open the session as if the user pressed Enter on it. Skip
-	// when the session has no live tmux pane (attachSession would no-op anyway).
+	// Attach intent now means interact through the dashboard Output panel. Skip
+	// when the session has no live tmux pane.
 	inst := h.getInstanceByID(id)
 	if inst == nil || !inst.Exists() {
 		return nil
 	}
-	// attachSession returns nil when there's no local tmux pane to attach (e.g.
-	// GetTmuxSession()==nil on a cross-socket session) and sets h.isAttaching
-	// itself on the real attach path. Don't pre-set it here: a premature set
-	// followed by a nil return would leave isAttaching stuck true and suppress
-	// View() forever. Mirror the attach_on_create path and guard on the cmd.
-	return h.attachSession(inst)
+	if h.enterInsertMode() {
+		return h.fetchSelectedPreview()
+	}
+	return nil
 }
 
 // isInGroupScope returns true if the given path is within the active group scope.
@@ -5803,28 +5672,21 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Save after dedup to persist any ID changes (initial load only)
 				h.saveInstances()
 			}
-			startupCmd := h.startupActionCmd()
 			// Trigger immediate preview fetch for initial selection (mutex-protected)
 			if selected := h.getSelectedSession(); selected != nil {
 				h.previewCacheMu.Lock()
 				h.previewFetchingID = selected.ID
 				h.previewCacheMu.Unlock()
 				// Batch preview fetch with any OpenCode detection commands
-				allCmds := append(detectionCmds, h.fetchPreview(selected, selected.ID, -1), startupCmd)
+				allCmds := append(detectionCmds, h.fetchPreview(selected, selected.ID, -1))
 				return h, tea.Batch(allCmds...)
 			}
 			// No selection, but still run detection commands if any
-			if len(detectionCmds) > 0 || startupCmd != nil {
-				return h, tea.Batch(append(detectionCmds, startupCmd)...)
+			if len(detectionCmds) > 0 {
+				return h, tea.Batch(detectionCmds...)
 			}
 		}
 		return h, nil
-
-	case startupActionMsg:
-		if msg.key == "" {
-			return h, nil
-		}
-		return h.handleMainKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(msg.key)})
 
 	case sessionCreatedMsg:
 		uiLog.Info("session_created_msg",
@@ -5908,18 +5770,13 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				h.setError(noticeError(h.err, msg.setupWarning))
 			}
 
-			// Auto-attach to the new session when [ui].attach_on_create is set,
-			// so creating a session "instantly opens" it instead of only moving
-			// the cursor to it. The session was just Start()ed (see
-			// createSessionInGroupWithWorktreeAndOptions), so its pane is live.
-			// attachSession returns nil when there is no local tmux pane to
-			// attach (e.g. a session whose tmux session could not be resolved);
-			// in that case we fall through to today's select-only behavior.
-			// Skip auto-attach when a setup warning is pending: attaching would
-			// hide the footer before the user can read it.
+			// Keep attach_on_create's "ready to type immediately" behavior, but
+			// activate the dashboard's Output panel instead of opening another
+			// full-screen terminal. Skip it when a setup warning is pending so
+			// the warning remains visible.
 			if h.attachOnCreate && msg.setupWarning == "" {
-				if attachTo := h.attachSession(msg.instance); attachTo != nil {
-					return h, tea.Batch(h.fetchPreview(msg.instance, msg.instance.ID, -1), attachTo)
+				if h.enterInsertMode() {
+					return h, h.fetchPreview(msg.instance, msg.instance.ID, -1)
 				}
 			}
 
@@ -6327,7 +6184,42 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// directly), but the pill froze on the previous fetch's totals.
 		// Invalidate so the next View() recomputes.
 		h.cachedStatusCounts.valid.Store(false)
+		// Creation may have targeted a folded remote/group. Open every ancestor
+		// before rebuilding so the new session can be selected and the Output
+		// interaction can begin as soon as it appears in the refreshed payload.
+		if h.pendingRemoteOutputName != "" && h.pendingRemoteOutputID != "" {
+			remoteRoot := "remotes/" + h.pendingRemoteOutputName
+			delete(h.remoteGroupsCollapsed, remoteRoot)
+			for _, remoteSession := range msg.sessions[h.pendingRemoteOutputName] {
+				if remoteSession.ID != h.pendingRemoteOutputID {
+					continue
+				}
+				prefix := remoteRoot
+				for _, segment := range strings.Split(normalizeRemoteGroupPath(remoteSession.Group), "/") {
+					prefix += "/" + segment
+					delete(h.remoteGroupsCollapsed, prefix)
+				}
+				break
+			}
+		}
 		h.rebuildFlatItems()
+		if h.pendingRemoteOutputName != "" && h.pendingRemoteOutputID != "" {
+			for i, item := range h.flatItems {
+				if item.Type != session.ItemTypeRemoteSession || item.RemoteSession == nil {
+					continue
+				}
+				if item.RemoteName == h.pendingRemoteOutputName && item.RemoteSession.ID == h.pendingRemoteOutputID {
+					h.cursor = i
+					h.syncViewport()
+					h.pendingRemoteOutputName = ""
+					h.pendingRemoteOutputID = ""
+					if h.enterInsertMode() {
+						return h, h.fetchSelectedPreview()
+					}
+					break
+				}
+			}
+		}
 		return h, nil
 
 	case remoteLatenciesFetchedMsg:
@@ -6372,21 +6264,12 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case remoteSessionCreatedMsg:
 		if msg.err != nil {
 			h.setError(msg.err)
+			return h, nil
 		}
-		// This message is returned after tea.Exec finishes the remote
-		// create+attach. Mirror the statusUpdateMsg attach-return cleanup so
-		// detaching from a newly created remote session leaves the terminal in
-		// the same state as detaching from an existing one: re-enable mouse
-		// reporting, restore legacy keyboard mode, force a resize, and schedule
-		// the delayed repaint (see the statusUpdateMsg case for the rationale).
-		h.beginAttachReturnGrace(time.Now())
-		return h, tea.Batch(
-			h.fetchRemoteSessions,
-			tea.EnableMouseCellMotion,
-			RestoreLegacyKeyboardCmd(os.Stdout),
-			tea.WindowSize(),
-			tea.Tick(attachReturnRefreshDelay, func(time.Time) tea.Msg { return attachReturnRefreshMsg{} }),
-		)
+		h.pendingRemoteOutputName = msg.remoteName
+		h.pendingRemoteOutputID = msg.sessionID
+		h.setError(fmt.Errorf("created remote session on %s; opening it in Output", msg.remoteName))
+		return h, h.fetchRemoteSessions
 
 	case MaintenanceCompleteMsg:
 		return h, func() tea.Msg {
@@ -8372,7 +8255,9 @@ func (h *Home) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if h.getLayoutMode() == LayoutModeDual {
 			leftWidth := h.sessionsPaneWidth()
 			if msg.X >= leftWidth {
-				return h, nil
+				// Clicking the preview/output side activates in-place typing for
+				// the current selection. The dashboard remains visible.
+				return h.activateSelectedInPlace()
 			}
 		}
 
@@ -8405,15 +8290,8 @@ func (h *Home) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 					h.setError(fmt.Errorf("session is starting, please wait..."))
 					return h, nil
 				}
-				if item.Session.Exists() {
-					// No isAttaching pre-set here: attachSession sets the flag
-					// itself right before returning the tea.Exec Cmd, and can
-					// return nil (GetTmuxSession()==nil on a cross-socket race)
-					// — a premature set followed by a nil return left the flag
-					// stuck true and View() suppressed forever (#1753; same
-					// rationale as the handleWebAttach call site).
-					return h, h.attachSession(item.Session)
-				}
+				h.cursor = itemIndex
+				return h.activateSelectedInPlace()
 			} else if item.Type == session.ItemTypeGroup {
 				groupPath := item.Path
 				h.groupTree.ToggleGroup(groupPath)
@@ -8491,6 +8369,65 @@ func (h *Home) mouseYToItemIndex(y int) int {
 		return -1
 	}
 	return itemIndex
+}
+
+// activateSelectedInPlace turns the Output panel into the selected session's
+// input surface. Live sessions enter type-through mode; stopped sessions keep
+// Enter's established restart behavior, and group rows keep toggling in place.
+// No branch suspends the dashboard or opens another terminal window.
+func (h *Home) activateSelectedInPlace() (tea.Model, tea.Cmd) {
+	if h.cursor < 0 || h.cursor >= len(h.flatItems) {
+		return h, nil
+	}
+
+	item := h.flatItems[h.cursor]
+	switch item.Type {
+	case session.ItemTypeSession:
+		if item.Session == nil {
+			return h, nil
+		}
+		if item.Session.Exists() {
+			tmuxSess := item.Session.GetTmuxSession()
+			if tmuxSess != nil && tmuxSess.IsPaneDead() {
+				if !h.hasActiveAnimation(item.Session.ID) {
+					h.resumingSessions[item.Session.ID] = time.Now()
+					return h, h.restartSession(item.Session)
+				}
+				return h, nil
+			}
+			if h.enterInsertMode() {
+				return h, h.fetchSelectedPreview()
+			}
+			return h, nil
+		}
+		if !h.hasActiveAnimation(item.Session.ID) {
+			h.resumingSessions[item.Session.ID] = time.Now()
+			return h, h.restartSession(item.Session)
+		}
+
+	case session.ItemTypeWindow, session.ItemTypeRemoteSession:
+		if h.enterInsertMode() {
+			return h, h.fetchSelectedPreview()
+		}
+
+	case session.ItemTypeGroup:
+		groupPath := item.Path
+		h.groupTree.ToggleGroup(groupPath)
+		h.rebuildFlatItems()
+		for i, flatItem := range h.flatItems {
+			if flatItem.Type == session.ItemTypeGroup && flatItem.Path == groupPath {
+				h.cursor = i
+				break
+			}
+		}
+		h.saveGroupState()
+		h.noteGroupToggled(groupPath)
+
+	case session.ItemTypeRemoteGroup:
+		h.toggleRemoteGroup(item.RemoteName, item.Path)
+	}
+
+	return h, nil
 }
 
 // handleMainKey handles keys in main view
@@ -8731,125 +8668,11 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		h.collapseOrNavUp()
 		return h, nil
 
-	case "shift+enter":
-		// Open the focused session in a new native terminal tab (or
-		// window, per [ui] iterm_open_as), leaving agent-deck running
-		// here. Issue #1069 feature 2 + #1100 remote-session support,
-		// credit @ddorman-dn.
-		//
-		// Reaching this arm at all required the #1093 fix to keyboard_compat.go
-		// + normalizeMainKey: Bubble Tea v1.3.10 has no shift+enter string,
-		// so we relay Shift+Enter via a Private-Use rune through the input
-		// reader and rewrite it to "shift+enter" before this switch sees it.
-		if h.cursor < len(h.flatItems) {
-			item := h.flatItems[h.cursor]
-			openAs := resolveITermOpenAs()
-			switch {
-			case item.Type == session.ItemTypeSession && item.Session != nil:
-				tmuxSess := item.Session.GetTmuxSession()
-				if tmuxSess != nil {
-					req := terminal.AttachRequest{
-						Name:       tmuxSess.Name,
-						SocketName: tmuxSess.SocketName,
-						OpenAs:     openAs,
-					}
-					if err := h.openInNewWindow(req, item.Session.Exists()); err != nil {
-						h.setError(fmt.Errorf("open in new window: %w", err))
-					}
-				}
-			case item.Type == session.ItemTypeRemoteSession && item.RemoteSession != nil:
-				if req, ok := buildRemoteAttachRequest(item.RemoteName, item.RemoteSession.ID, openAs); ok {
-					if err := h.openInNewWindow(req, true); err != nil {
-						h.setError(fmt.Errorf("open remote in new window: %w", err))
-					}
-				}
-			}
-		}
-		return h, nil
-
-	case "enter":
-		if h.cursor < len(h.flatItems) {
-			item := h.flatItems[h.cursor]
-			if item.Type == session.ItemTypeSession && item.Session != nil {
-				if item.Session.Exists() {
-					// Pane dead (process exited) — restart instead of attaching to dead pane.
-					tmuxSess := item.Session.GetTmuxSession()
-					if tmuxSess != nil && tmuxSess.IsPaneDead() {
-						if !h.hasActiveAnimation(item.Session.ID) {
-							h.resumingSessions[item.Session.ID] = time.Now()
-							return h, h.restartSession(item.Session)
-						}
-						return h, nil
-					}
-					return h, h.attachSession(item.Session)
-				}
-				// Session exited (tmux session gone) — auto-restart it.
-				if !h.hasActiveAnimation(item.Session.ID) {
-					h.resumingSessions[item.Session.ID] = time.Now()
-					return h, h.restartSession(item.Session)
-				}
-			} else if item.Type == session.ItemTypeGroup {
-				// Toggle group on enter
-				groupPath := item.Path
-				h.groupTree.ToggleGroup(groupPath)
-				h.rebuildFlatItems()
-				for i, fi := range h.flatItems {
-					if fi.Type == session.ItemTypeGroup && fi.Path == groupPath {
-						h.cursor = i
-						break
-					}
-				}
-				h.saveGroupState()
-				h.noteGroupToggled(groupPath)
-			} else if item.Type == session.ItemTypeRemoteGroup {
-				// Enter on a remote header folds it, mirroring local groups.
-				// There is nothing to attach to on a header row.
-				h.toggleRemoteGroup(item.RemoteName, item.Path)
-			} else if item.Type == session.ItemTypeWindow {
-				// Find parent session by WindowSessionID
-				var parentInst *session.Instance
-				h.instancesMu.RLock()
-				for _, inst := range h.instances {
-					if inst.ID == item.WindowSessionID {
-						parentInst = inst
-						break
-					}
-				}
-				h.instancesMu.RUnlock()
-
-				if parentInst != nil && parentInst.Exists() {
-					tmuxSess := parentInst.GetTmuxSession()
-					if tmuxSess != nil {
-						tmuxSess.EnsureConfigured()
-						parentInst.SyncSessionIDsToTmux()
-						parentInst.MarkAccessed()
-
-						if parentInst.GetStatusThreadSafe() == session.StatusWaiting {
-							tmuxSess.Acknowledge()
-							if db := statedb.GetGlobal(); db != nil {
-								_ = db.SetAcknowledged(parentInst.ID, true)
-							}
-						}
-
-						h.isAttaching.Store(true)
-						return h, tea.Exec(attachWindowCmd{
-							session:     tmuxSess,
-							windowIndex: item.WindowIndex,
-							detachByte:  h.detachByte(),
-							onExit:      func() { h.isAttaching.Store(false) },
-						}, func(err error) tea.Msg {
-							h.isAttaching.Store(false)
-							parentInst.MarkAccessed()
-							return statusUpdateMsg{}
-						})
-					}
-				}
-			} else if item.Type == session.ItemTypeRemoteSession && item.RemoteSession != nil {
-				// Attach to remote session via SSH
-				return h, h.attachRemoteSession(item.RemoteName, item.RemoteSession.ID)
-			}
-		}
-		return h, nil
+	case "enter", "shift+enter":
+		// The dashboard is the interaction surface. Keep the selected agent's
+		// output visible and forward subsequent keystrokes in place; never
+		// suspend Bubble Tea for a second full-screen terminal or native window.
+		return h.activateSelectedInPlace()
 
 	case "tab", "l", "right":
 		// Expand/collapse group, or toggle session windows
@@ -9327,24 +9150,18 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return h, nil
 
 	case "E":
-		// Exec an interactive shell inside the sandbox container.
+		// Open an interactive shell inside the sandbox container as another pane
+		// of the selected session. Because that pane becomes active, the existing
+		// Output preview and type-through sender immediately target it.
 		if selected := h.getSelectedSession(); selected != nil && selected.IsSandboxed() &&
 			selected.SandboxContainer != "" {
-			tmuxName, shellErr := selected.OpenContainerShell()
-			if shellErr != nil {
+			if shellErr := selected.OpenContainerShellPane(); shellErr != nil {
 				h.setError(shellErr)
 				return h, nil
 			}
-			termSession := &tmux.Session{Name: tmuxName}
-			h.isAttaching.Store(true)
-			return h, tea.Exec(attachCmd{
-				session: termSession,
-				opts:    tmux.AttachOptions{DetachByte: h.detachByte()},
-				onExit:  func() { h.isAttaching.Store(false) },
-			}, func(err error) tea.Msg {
-				h.isAttaching.Store(false)
-				return statusUpdateMsg{}
-			})
+			if h.enterInsertMode() {
+				return h, h.fetchSelectedPreview()
+			}
 		}
 		return h, nil
 
@@ -13628,7 +13445,9 @@ func remoteRestartAnimationID(remoteName, sessionID string) string {
 }
 
 type remoteSessionCreatedMsg struct {
-	err error
+	remoteName string
+	sessionID  string
+	err        error
 }
 
 // deleteRemoteSession deletes a remote session and refreshes the remote list.
@@ -13964,98 +13783,45 @@ func (a attachCmd) SetStdin(r io.Reader)  {}
 func (a attachCmd) SetStdout(w io.Writer) {}
 func (a attachCmd) SetStderr(w io.Writer) {}
 
-// createRemoteSession creates a new session on a remote and auto-attaches to it.
+// createRemoteSession creates a new session on a remote and activates it in the
+// dashboard Output panel after the refreshed remote list contains it.
 // Used by quick-create (N): auto-generated name, remote defaults (shell).
 func (h *Home) createRemoteSession(remoteName string) tea.Cmd {
 	return h.createRemoteSessionWithOptions(remoteName, "", "", "", "")
 }
 
-// remoteCreateAndAttachCmd creates a session on the remote, then attaches to it.
-type remoteCreateAndAttachCmd struct {
-	runner    *session.SSHRunner
-	tool      string
-	title     string
-	path      string
-	group     string
-	createCtx context.Context
-	// onExit: same contract as attachCmd.onExit (#1753) — clear the attach flag
-	// while Bubble Tea's loop is still parked, so the first View() after resume
-	// never races the ExecCallback goroutine and renders blank.
-	onExit func()
-}
-
-type remoteAttachFailedError struct {
-	err error
-}
-
-func (e remoteAttachFailedError) Error() string {
-	return e.err.Error()
-}
-
-func (e remoteAttachFailedError) Unwrap() error {
-	return e.err
-}
-
-func (r remoteCreateAndAttachCmd) Run() error {
-	if r.onExit != nil {
-		defer r.onExit()
-	}
-	baseCtx := r.createCtx
-	if baseCtx == nil {
-		baseCtx = context.Background()
-	}
-	ctx, cancel := context.WithTimeout(baseCtx, 20*time.Second)
-	defer cancel()
-	sessionID, err := r.runner.CreateSessionWithOptions(ctx, r.tool, r.title, r.path, r.group)
-	if err != nil {
-		return err
-	}
-	if err := r.runner.Attach(sessionID); err != nil {
-		return remoteAttachFailedError{err: err}
-	}
-	return nil
-}
-
-func (r remoteCreateAndAttachCmd) SetStdin(reader io.Reader)  {}
-func (r remoteCreateAndAttachCmd) SetStdout(writer io.Writer) {}
-func (r remoteCreateAndAttachCmd) SetStderr(writer io.Writer) {}
-
 // createRemoteSessionWithOptions creates a new session on a remote with an
-// explicit tool/title/path/group from the new-session dialog (#1353), then
-// auto-attaches to it. Empty values fall back to remote defaults (shell,
-// auto-generated name, remote CWD).
+// explicit tool/title/path/group from the new-session dialog (#1353). It runs
+// without suspending Bubble Tea; after creation the session is selected and
+// activated in the dashboard Output panel. Empty values fall back to remote
+// defaults (shell, auto-generated name, remote CWD).
 func (h *Home) createRemoteSessionWithOptions(remoteName, tool, title, path, group string) tea.Cmd {
 	config, err := session.LoadUserConfig()
 	if err != nil || config == nil || config.Remotes == nil {
 		return func() tea.Msg {
-			return sessionCreatedMsg{err: fmt.Errorf("failed to load remote config")}
+			return remoteSessionCreatedMsg{remoteName: remoteName, err: fmt.Errorf("failed to load remote config")}
 		}
 	}
 	rc, ok := config.Remotes[remoteName]
 	if !ok {
 		return func() tea.Msg {
-			return sessionCreatedMsg{err: fmt.Errorf("remote '%s' not found", remoteName)}
+			return remoteSessionCreatedMsg{remoteName: remoteName, err: fmt.Errorf("remote '%s' not found", remoteName)}
 		}
 	}
 	runner := session.NewSSHRunner(remoteName, rc)
-	h.isAttaching.Store(true)
-	return tea.Exec(remoteCreateAndAttachCmd{
-		runner: runner, tool: tool, title: title, path: path, group: group, createCtx: h.ctx,
-		// Clear the flag inside Run(), before Bubble Tea restores the terminal
-		// and resumes the loop (#1753); the callback below is only the belt for
-		// the path where Run() never executes.
-		onExit: func() { h.isAttaching.Store(false) },
-	}, func(err error) tea.Msg {
-		h.isAttaching.Store(false)
-		if err != nil {
-			var attachErr remoteAttachFailedError
-			if errors.As(err, &attachErr) {
-				return remoteSessionCreatedMsg{err: fmt.Errorf("failed to attach to remote session after creating it: %w", attachErr)}
-			}
-			return sessionCreatedMsg{err: fmt.Errorf("failed to create remote session: %w", err)}
+	return func() tea.Msg {
+		baseCtx := h.ctx
+		if baseCtx == nil {
+			baseCtx = context.Background()
 		}
-		return remoteSessionCreatedMsg{}
-	})
+		ctx, cancel := context.WithTimeout(baseCtx, 20*time.Second)
+		defer cancel()
+		sessionID, err := runner.CreateSessionWithOptions(ctx, tool, title, path, group)
+		if err != nil {
+			return remoteSessionCreatedMsg{remoteName: remoteName, err: fmt.Errorf("failed to create remote session: %w", err)}
+		}
+		return remoteSessionCreatedMsg{remoteName: remoteName, sessionID: sessionID}
+	}
 }
 
 // attachWindowCmd implements tea.ExecCommand for attaching to a specific tmux window
@@ -15962,7 +15728,7 @@ func (h *Home) renderHelpBarCompact() string {
 				contextHints = append(contextHints, h.helpKeyShort(newQuickKey, "New"))
 			}
 		} else {
-			contextHints = append(contextHints, h.helpKeyShort("⏎", "Attach"))
+			contextHints = append(contextHints, h.helpKeyShort("⏎", "Output"))
 			if newQuickKey != "" {
 				contextHints = append(contextHints, h.helpKeyShort(newQuickKey, "New"))
 			}
@@ -16110,7 +15876,7 @@ func (h *Home) renderHelpBarFull() string {
 	undoKey := h.actionKey(hotkeyUndoDelete)
 
 	// Determine context-specific hints grouped by action type
-	var primaryHints []string   // Main actions (attach, toggle, etc.)
+	var primaryHints []string   // Main actions (Output, toggle, etc.)
 	var secondaryHints []string // Edit actions (rename, move, delete)
 	var contextTitle string
 
@@ -16144,7 +15910,7 @@ func (h *Home) renderHelpBarFull() string {
 			}
 		} else {
 			contextTitle = "Session"
-			primaryHints = append(primaryHints, h.helpKey("Enter", "Attach"))
+			primaryHints = append(primaryHints, h.helpKey("Enter", "Output"))
 			if newQuickKey != "" {
 				primaryHints = append(primaryHints, h.helpKey(newQuickKey, "New/Quick"))
 			}
@@ -16417,10 +16183,10 @@ func (h *Home) curatedContextHints(item session.Item) []footerHint {
 		}
 		if sessionIsQueued(s) {
 			// Queued: waiting for a group slot, no tmux yet — so it is neither
-			// attachable (no pane to enter) nor restartable (nothing running to
+			// interactive (no Output pane) nor restartable (nothing running to
 			// restart). The only meaningful actions are dropping it from the
 			// queue or creating something else. Without this branch the curated
-			// footer advertised "⏎ attach"+restart for a session that has no
+			// footer advertised "⏎ output"+restart for a session that has no
 			// tmux (PR #1289 review nit 2b).
 			add(h.actionKey(hotkeyDelete), "delete")
 			add(newQuick, "new")
@@ -16434,9 +16200,9 @@ func (h *Home) curatedContextHints(item session.Item) []footerHint {
 			}
 			add(h.actionKey(hotkeyDelete), "delete")
 		} else {
-			// Live/attachable session: attach first, then restart, then the
+			// Live session: Output interaction first, then restart, then the
 			// most relevant follow-up (fork while forkable, else new).
-			add("⏎", "attach")
+			add("⏎", "output")
 			add(h.actionKey(hotkeyRestart), "restart")
 			if s.CanFork() {
 				add(h.actionKey(hotkeyQuickFork), "fork")
@@ -16446,21 +16212,21 @@ func (h *Home) curatedContextHints(item session.Item) []footerHint {
 		}
 
 	case session.ItemTypeWindow:
-		// A tmux window row attaches just like its session.
-		add("⏎", "attach")
+		// A tmux window row is interactive through Output like its session.
+		add("⏎", "output")
 
 	case session.ItemTypeRemoteSession:
-		// A remote session row attaches over SSH just like a local session;
-		// without this case the curated footer dropped the attach hint for
+		// A remote session row is interactive through Output like a local one;
+		// without this case the curated footer dropped the primary hint for
 		// remote rows (PR #1289 review nit 1).
-		add("⏎", "attach")
+		add("⏎", "output")
 	}
 
 	return hints
 }
 
 // sessionIsDead reports whether a session is stopped or errored — the states
-// for which restart, rather than attach, is the relevant footer action. Reads
+// for which restart, rather than Output interaction, is the relevant footer action. Reads
 // the status via the thread-safe getter since the render goroutine runs
 // concurrently with backgroundStatusUpdate (PR #1289 review nit 2).
 func sessionIsDead(s *session.Instance) bool {
@@ -19998,8 +19764,8 @@ func (h *Home) handleScrollbackPagerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return h, nil
 }
 
-// attachToSwitchTarget re-attaches to the session with the given ID and lands
-// the list cursor there on the next detach. Returns nil if the session is gone.
+// attachToSwitchTarget selects the session with the given ID and resumes
+// interaction in the dashboard Output panel. Returns nil if it is gone.
 func (h *Home) attachToSwitchTarget(id string) tea.Cmd {
 	if id == "" {
 		return nil
@@ -20010,10 +19776,13 @@ func (h *Home) attachToSwitchTarget(id string) tea.Cmd {
 	if inst == nil {
 		return nil
 	}
-	h.lastNotifSwitchMu.Lock()
-	h.lastNotifSwitchID = id
-	h.lastNotifSwitchMu.Unlock()
-	return h.attachSession(inst)
+	if !h.SelectSessionByID(id) {
+		return nil
+	}
+	if h.enterInsertMode() {
+		return h.fetchSelectedPreview()
+	}
+	return nil
 }
 
 // handleSessionSwitcherKey handles key events when the in-attach switcher is

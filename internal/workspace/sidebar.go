@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -28,9 +27,6 @@ type paneController interface {
 	ActivateInstance(context.Context, string) error
 	FocusAgent(context.Context) error
 	Detach(context.Context) error
-	ManagerCommand(string, string) *exec.Cmd
-	ClassicAttachCommand(string) *exec.Cmd
-	SetZoom(context.Context, bool) error
 	UpdateChrome(context.Context, string, string) error
 }
 
@@ -98,8 +94,6 @@ type focusFinishedMsg struct {
 	err        error
 }
 
-type managerFinishedMsg struct{ err error }
-type zoomRestoredMsg struct{ err error }
 type detachFinishedMsg struct{ err error }
 type chromeFinishedMsg struct {
 	key string
@@ -213,24 +207,12 @@ func (m *sidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.busy = "opening " + item.data.Title
 			return m, m.focusSelectedCmd(*item)
-		case "m":
-			return m, m.openManager("", "manager")
-		case "n":
-			return m, m.openManager("n", "new session")
-		case "f":
-			return m, m.openManager("f", "quick fork")
-		case "F":
-			return m, m.openManager("F", "fork options")
-		case "/":
-			return m, m.openManager("/", "search")
-		case "?":
-			return m, m.openManager("?", "help")
-		case "S":
-			return m, m.openManager("S", "settings")
-		case "$":
-			return m, m.openManager("$", "costs")
-		case "t":
-			return m, m.openManager("t", "view options")
+		case "m", "n", "f", "F", "/", "?", "S", "$", "t":
+			// Public launches no longer enter this legacy compositor. If an old
+			// dashboard is still alive during an upgrade, keep it on one screen
+			// and tell the user to restart instead of opening the retired manager.
+			m.err = fmt.Errorf("restart agent-deck to use the unified dashboard")
+			return m, nil
 		case "0":
 			return m, m.setFilter(workspaceFilterAll)
 		case "!", "shift+1":
@@ -304,19 +286,6 @@ func (m *sidebarModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeID = msg.instanceID
 		m.activeKey = msg.attachKey
 		m.err = nil
-
-	case managerFinishedMsg:
-		m.busy = ""
-		if msg.err != nil {
-			m.err = msg.err
-		}
-		return m, restoreZoomCmd(m.controller)
-
-	case zoomRestoredMsg:
-		if msg.err != nil {
-			m.err = msg.err
-		}
-		return m, loadSessionsCmd(m.profile)
 
 	case chromeFinishedMsg:
 		if msg.err != nil {
@@ -434,14 +403,6 @@ func (m *sidebarModel) View() string {
 	return strings.Join(lines, "\n")
 }
 
-func (m *sidebarModel) openManager(action, label string) tea.Cmd {
-	instanceID := ""
-	if item := m.selected(); item != nil && item.data != nil {
-		instanceID = item.data.ID
-	}
-	return m.execZoomed(m.controller.ManagerCommand(instanceID, action), label)
-}
-
 func (m *sidebarModel) setFilter(filter workspaceFilter) tea.Cmd {
 	selectedID := ""
 	if selected := m.selected(); selected != nil {
@@ -500,23 +461,6 @@ func (m *sidebarModel) focusSelectedCmd(item sidebarItem) tea.Cmd {
 	return func() tea.Msg {
 		err := m.controller.ActivateInstance(context.Background(), item.data.ID)
 		return focusFinishedMsg{instanceID: item.data.ID, attachKey: item.attachKey, err: err}
-	}
-}
-
-func (m *sidebarModel) execZoomed(command *exec.Cmd, label string) tea.Cmd {
-	if err := m.controller.SetZoom(context.Background(), true); err != nil {
-		m.err = err
-		return nil
-	}
-	m.busy = label
-	return tea.ExecProcess(command, func(err error) tea.Msg {
-		return managerFinishedMsg{err: err}
-	})
-}
-
-func restoreZoomCmd(controller paneController) tea.Cmd {
-	return func() tea.Msg {
-		return zoomRestoredMsg{err: controller.SetZoom(context.Background(), false)}
 	}
 }
 

@@ -23,7 +23,7 @@ func (m *Menu) SetWidth(width int) {
 func (m *Menu) View() string {
 	items := []string{
 		MenuKey("↑↓", "Navigate"),
-		MenuKey("Enter", "Attach"),
+		MenuKey("Enter", "Output"),
 		MenuKey("/", "Search"),
 		MenuKey("n", "New"),
 		MenuKey("Tab", "Fold"),

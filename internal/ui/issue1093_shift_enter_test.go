@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/RishabhKodes/agent-deck/internal/terminal"
 )
 
 // Issue #1093 (by @ddorman-dn): Shift+Enter, shipped in #1077, did not actually
@@ -142,33 +140,22 @@ func TestIssue1093_NormalizeMainKey_MarkerMapsToShiftEnter(t *testing.T) {
 	}
 }
 
-// TestIssue1093_HomeDispatch_ShiftEnterCallsLauncher exercises the full
-// keypress → launcher path through the public Home.handleMainKey entrypoint.
-// Synthetic KeyMsg matches what Bubble Tea produces from the UTF-8 bytes of
-// our marker rune. The launcher itself is captured via an injected sink so
-// the test does not spawn an actual iTerm2 window.
-func TestIssue1093_HomeDispatch_ShiftEnterCallsLauncher(t *testing.T) {
+// TestIssue1093_HomeDispatch_ShiftEnterStaysInDashboard exercises the full
+// keypress path through Home.handleMainKey. Shift+Enter is intentionally an
+// alias for Enter now and must never invoke the native-window launcher. This
+// fixture has no live tmux server, so the in-dashboard action is a restart;
+// live-session Output activation is covered by the remote dispatch test.
+func TestIssue1093_HomeDispatch_ShiftEnterStaysInDashboard(t *testing.T) {
 	home, _, _ := armHomeWithOneSession(t)
-
-	var called bool
-	var capturedReq terminal.AttachRequest
-	home.openInNewWindowSink = func(req terminal.AttachRequest) error {
-		called = true
-		capturedReq = req
-		return nil
-	}
 
 	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{shiftEnterMarker}}
 	if got := home.normalizeMainKey(keyMsg.String()); got != "shift+enter" {
 		t.Fatalf("precondition: normalizeMainKey of synthetic Shift+Enter KeyMsg = %q, want shift+enter", got)
 	}
 
-	_, _ = home.handleMainKey(keyMsg)
+	_, cmd := home.handleMainKey(keyMsg)
 
-	if !called {
-		t.Fatal("Shift+Enter dispatch did NOT call the new-window launcher — fell through to in-pane attach (this is the #1093 regression)")
-	}
-	if capturedReq.Name == "" {
-		t.Errorf("launcher called with empty AttachRequest.Name (got %+v) — handler didn't pull the tmux session name", capturedReq)
+	if cmd == nil {
+		t.Fatal("Shift+Enter on a stopped session did not schedule its in-dashboard restart")
 	}
 }

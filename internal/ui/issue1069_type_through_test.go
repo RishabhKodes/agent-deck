@@ -233,15 +233,15 @@ func TestIssue1069_SpaceForwardedAsLiteral(t *testing.T) {
 	}
 }
 
-// TestIssue1069_IndicatorRenderedInView verifies the visual indicator shows
-// up at the bottom of the rendered view while insert mode is active, so the
+// TestIssue1069_IndicatorRenderedInView verifies the Output-active indicator
+// appears at the bottom while type-through is active, so the
 // user has unambiguous feedback that subsequent typing is being routed away.
 func TestIssue1069_IndicatorRenderedInView(t *testing.T) {
 	home, _, _ := armHomeWithOneSession(t)
 
-	// Render once in normal mode — expect no INSERT marker.
-	if strings.Contains(home.View(), "INSERT") {
-		t.Fatal("View() should not contain INSERT marker in normal mode")
+	// Render once in normal mode — expect no Output-active marker.
+	if strings.Contains(home.View(), "OUTPUT ACTIVE") {
+		t.Fatal("View() should not contain OUTPUT ACTIVE marker in navigation mode")
 	}
 
 	// Enter insert mode and re-render.
@@ -249,11 +249,11 @@ func TestIssue1069_IndicatorRenderedInView(t *testing.T) {
 	home = model.(*Home)
 
 	view := home.View()
-	if !strings.Contains(view, "INSERT") {
-		t.Errorf("View() should contain INSERT marker while in insert mode; got: %q", lastNonEmptyLine(view))
+	if !strings.Contains(view, "OUTPUT ACTIVE") {
+		t.Errorf("View() should contain OUTPUT ACTIVE marker while interacting; got: %q", lastNonEmptyLine(view))
 	}
 	if !strings.Contains(view, "focused-session") {
-		t.Errorf("View() insert-mode indicator should name the target session; got: %q", lastNonEmptyLine(view))
+		t.Errorf("View() Output-active indicator should name the target session; got: %q", lastNonEmptyLine(view))
 	}
 }
 

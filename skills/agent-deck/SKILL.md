@@ -373,7 +373,8 @@ Key constraints:
 |-----|--------|
 | `j/k` or `↑/↓` | Move up/down |
 | `h/l` or `←/→` | Collapse/expand groups |
-| `Enter` | Attach to session |
+| `Enter` | Interact with session in Output |
+| `Esc` | Return from Output to navigation |
 
 ### Session Actions
 | Key | Action |

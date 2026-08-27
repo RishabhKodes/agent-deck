@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The native workspace now mirrors the manager dashboard with fleet and system
-  status, manager filters and actions, a session tree, tool metadata, MCP/plugin/
-  channel details, and supported analytics above the unchanged live tmux output.
+- Agent Deck now has one unified dashboard: the session tree, management
+  dialogs, metadata, analytics, live Output, and prompt input stay on the same
+  screen. Enter or a click on Output activates in-place typing; Esc returns to
+  navigation. The `workspace` and `manager` commands are aliases for this UI,
+  and normal dashboard actions no longer open attach or native-terminal screens.
 
 ## [1.15.0] - 2026-08-23
 

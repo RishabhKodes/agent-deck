@@ -10979,6 +10979,38 @@ func (i *Instance) OpenContainerShell() (string, error) {
 	return tmuxName, nil
 }
 
+// OpenContainerShellPane opens the sandbox shell as a pane of the managed
+// session. Unlike OpenContainerShell it does not create a separate tmux
+// session, which lets the dashboard's Output panel remain the sole UI surface.
+func (i *Instance) OpenContainerShellPane() error {
+	if !i.IsSandboxed() {
+		return fmt.Errorf("session %s is not sandboxed", i.ID)
+	}
+	if i.SandboxContainer == "" || !docker.IsManagedContainer(i.SandboxContainer) {
+		return fmt.Errorf("no valid sandbox container for session %s", i.ID)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ctr := docker.FromName(i.SandboxContainer)
+	running, err := ctr.IsRunning(ctx)
+	if err != nil {
+		return fmt.Errorf("checking container %s: %w", i.SandboxContainer, err)
+	}
+	if !running {
+		return fmt.Errorf("sandbox container %s is not running", i.SandboxContainer)
+	}
+
+	tmuxSession := i.GetTmuxSession()
+	if tmuxSession == nil {
+		return fmt.Errorf("session %s has no tmux pane", i.ID)
+	}
+	if err := tmuxSession.SplitCommandPane("", "docker", "exec", "-it", i.SandboxContainer, "/bin/sh"); err != nil {
+		return fmt.Errorf("creating sandbox shell pane: %w", err)
+	}
+	return nil
+}
+
 // wrapForSSH wraps the command in an SSH invocation if the instance targets a remote host.
 // Uses ControlMaster for connection multiplexing to avoid repeated handshakes.
 func (i *Instance) wrapForSSH(command string) string {

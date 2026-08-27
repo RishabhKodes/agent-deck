@@ -6002,12 +6002,32 @@ func (s *Session) SplitShellPane(workdir string) error {
 	if shell == "" {
 		shell = "/bin/sh"
 	}
+	return s.SplitCommandPane(workdir, shell)
+}
+
+// SplitCommandPane adds a vertical split pane to this session and starts the
+// supplied command directly, without shell interpolation. The new pane becomes
+// active, so capture-pane and send-keys addressed to the session follow it.
+func (s *Session) SplitCommandPane(workdir string, command ...string) error {
+	if len(command) == 0 {
+		return fmt.Errorf("split pane command is empty")
+	}
 	args := []string{"split-window", "-h", "-t", s.Name}
 	if workdir != "" {
 		args = append(args, "-c", workdir)
 	}
-	args = append(args, shell)
+	args = append(args, command...)
 	return tmuxExec(s.SocketName, args...).Run()
+}
+
+// SelectWindow makes index the session's active window. Dashboard Output uses
+// this before opening its session-scoped KeySender so input and capture-pane
+// both follow the window row the user selected.
+func (s *Session) SelectWindow(index int) error {
+	if index < 0 {
+		return fmt.Errorf("window index must be non-negative")
+	}
+	return s.runBoundedMutation("select-window", "-t", fmt.Sprintf("%s:%d", s.Name, index))
 }
 
 // ListAllSessions returns all Agent Deck tmux sessions

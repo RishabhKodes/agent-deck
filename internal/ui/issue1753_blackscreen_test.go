@@ -101,10 +101,9 @@ func TestIssue1753_FirstViewNonEmptyAfterWindowAttach(t *testing.T) {
 	}
 }
 
-// TestIssue1753_FirstViewNonEmptyAfterRemoteAttach: the remote SSH flavors.
-// Before the fix neither remoteAttachCmd nor remoteCreateAndAttachCmd had an
-// onExit at all — the flag was cleared only in the ExecCallback goroutine,
-// which races the first View() after Bubble Tea resumes.
+// TestIssue1753_FirstViewNonEmptyAfterRemoteAttach covers the remaining
+// explicit remote SSH attach command. Dashboard remote creation no longer uses
+// tea.Exec or leaves the unified screen, so it has no attach-return lifecycle.
 func TestIssue1753_FirstViewNonEmptyAfterRemoteAttach(t *testing.T) {
 	// Host "" fails ValidateSSHHost immediately: Run errors without spawning
 	// ssh, exactly the shape of a failed remote attach.
@@ -129,24 +128,6 @@ func TestIssue1753_FirstViewNonEmptyAfterRemoteAttach(t *testing.T) {
 		}
 	})
 
-	t.Run("create-and-attach", func(t *testing.T) {
-		h := blackscreenTestHome(t)
-		h.isAttaching.Store(true)
-		cmd := remoteCreateAndAttachCmd{
-			runner: runner,
-			tool:   "shell",
-			onExit: func() { h.isAttaching.Store(false) },
-		}
-		if err := cmd.Run(); err == nil {
-			t.Fatal("precondition: remote create against an empty host should fail")
-		}
-		if h.isAttaching.Load() {
-			t.Fatal("remoteCreateAndAttachCmd.Run returned with isAttaching still set (#1753)")
-		}
-		if strings.TrimSpace(h.View()) == "" {
-			t.Fatal("first View() after remote create-and-attach return is empty (#1753)")
-		}
-	})
 }
 
 // TestIssue1753_FirstViewNonEmptyOnReloadingReturn: the auto-reload branch of
@@ -239,9 +220,7 @@ func TestIssue1753_AllExecCommandsClearFlagInRun(t *testing.T) {
 
 	for _, cmdType := range []string{
 		"tea.Exec(attachCmd{",
-		"tea.Exec(attachWindowCmd{",
 		"tea.Exec(remoteAttachCmd{",
-		"tea.Exec(remoteCreateAndAttachCmd{",
 	} {
 		idx := 0
 		found := false
@@ -271,7 +250,6 @@ func TestIssue1753_AllExecCommandsClearFlagInRun(t *testing.T) {
 		"func (a attachCmd) Run() error {",
 		"func (a attachWindowCmd) Run() error {",
 		"func (r remoteAttachCmd) Run() error {",
-		"func (r remoteCreateAndAttachCmd) Run() error {",
 	} {
 		body := funcBody(t, text, runSig)
 		if !strings.Contains(body, "onExit") {

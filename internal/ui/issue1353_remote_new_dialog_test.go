@@ -165,9 +165,9 @@ func TestIssue1353_SubmitRoutesToRemote(t *testing.T) {
 		t.Fatal("submit must return a command (remote create)")
 	}
 	msg := cmd()
-	created, ok := msg.(sessionCreatedMsg)
+	created, ok := msg.(remoteSessionCreatedMsg)
 	if !ok {
-		t.Fatalf("expected sessionCreatedMsg from remote-create path, got %T", msg)
+		t.Fatalf("expected remoteSessionCreatedMsg from remote-create path, got %T", msg)
 	}
 	if created.err == nil || !strings.Contains(created.err.Error(), "remote") {
 		t.Fatalf("expected remote-lookup error (proves remote routing), got %v", created.err)

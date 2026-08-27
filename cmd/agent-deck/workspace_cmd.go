@@ -9,60 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/RishabhKodes/agent-deck/internal/session"
 	"github.com/RishabhKodes/agent-deck/internal/workspace"
 )
-
-func handleWorkspace(profile string, args []string) {
-	if len(args) > 0 && args[0] == "stop" {
-		handleWorkspaceStop(profile, args[1:])
-		return
-	}
-
-	settings := session.GetWorkspaceSettings()
-	fs := flag.NewFlagSet("workspace", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	sidebarWidth := fs.Int("sidebar-width", settings.GetSidebarWidth(), "Navigator width in columns (24-72)")
-	fs.Usage = func() {
-		fmt.Println("Usage: agent-deck [-p profile] workspace [options]")
-		fmt.Println()
-		fmt.Println("Open the native agent dashboard.")
-		fmt.Println("Ctrl+Q returns to the navigator; q detaches without stopping agents.")
-		fmt.Println()
-		fmt.Println("Options:")
-		fs.PrintDefaults()
-		fmt.Println()
-		fmt.Println("Commands:")
-		fmt.Println("  stop    Stop only the outer workspace dashboard")
-	}
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return
-		}
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		return
-	}
-	if fs.NArg() != 0 {
-		fmt.Fprintf(os.Stderr, "Error: unknown workspace argument: %s\n", fs.Arg(0))
-		fs.Usage()
-		return
-	}
-
-	binaryPath, err := os.Executable()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: resolve agent-deck executable: %v\n", err)
-		return
-	}
-	ctx, cancel := workspaceSignalContext()
-	defer cancel()
-	if err := workspace.Run(ctx, workspace.LaunchOptions{
-		Profile:      profile,
-		SidebarWidth: *sidebarWidth,
-		BinaryPath:   binaryPath,
-	}); err != nil && !errors.Is(err, context.Canceled) {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-	}
-}
 
 func handleWorkspaceStop(profile string, args []string) {
 	fs := flag.NewFlagSet("workspace stop", flag.ContinueOnError)
@@ -70,7 +18,7 @@ func handleWorkspaceStop(profile string, args []string) {
 	fs.Usage = func() {
 		fmt.Println("Usage: agent-deck [-p profile] workspace stop")
 		fmt.Println()
-		fmt.Println("Stop the outer dashboard. Managed agent sessions keep running.")
+		fmt.Println("Stop a legacy outer workspace. Managed agent sessions keep running.")
 	}
 	if err := fs.Parse(args); err != nil {
 		return
@@ -87,7 +35,7 @@ func handleWorkspaceStop(profile string, args []string) {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return
 	}
-	fmt.Println("Workspace stopped. Agent sessions are still running.")
+	fmt.Println("Legacy workspace stopped. Agent sessions are still running.")
 }
 
 func handleWorkspaceSidebar(profile string, args []string) {

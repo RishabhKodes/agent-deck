@@ -27,6 +27,10 @@ type insertKeySender interface {
 type insertTargetRef struct {
 	// Local target. nil for remote sessions.
 	local *session.Instance
+	// A selected tmux window row must become active before the session-scoped
+	// sender opens. hasWindow distinguishes window 0 from a session row.
+	windowIndex int
+	hasWindow   bool
 	// Remote target name (the SSH remote alias, e.g. "windows"). Empty for
 	// local sessions. When non-empty, remoteID must also be set.
 	remoteName string
@@ -53,6 +57,11 @@ func defaultInsertOpenKeySender(target insertTargetRef) (insertKeySender, error)
 	tmuxSess := target.local.GetTmuxSession()
 	if tmuxSess == nil {
 		return nil, errInsertNoTmuxSession
+	}
+	if target.hasWindow {
+		if err := tmuxSess.SelectWindow(target.windowIndex); err != nil {
+			return nil, err
+		}
 	}
 	ks, err := tmuxSess.OpenKeySender()
 	if err != nil {

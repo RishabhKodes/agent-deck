@@ -1667,9 +1667,9 @@ func TestRemoteSelectionQuickCreateStillRunsRemoteCommand(t *testing.T) {
 	}
 
 	msg := cmd()
-	createMsg, ok := msg.(sessionCreatedMsg)
+	createMsg, ok := msg.(remoteSessionCreatedMsg)
 	if !ok {
-		t.Fatalf("command returned %T, want sessionCreatedMsg", msg)
+		t.Fatalf("command returned %T, want remoteSessionCreatedMsg", msg)
 	}
 	if createMsg.err == nil {
 		t.Fatal("expected error when remote config is unavailable")
@@ -2286,12 +2286,12 @@ func TestCuratedFooterAlwaysEndsWithSettingsThenHelp(t *testing.T) {
 	if !(si < hi) {
 		t.Errorf("settings must come before help as the last two items\nGot: %q", result)
 	}
-	if !strings.Contains(result, "attach") {
-		t.Errorf("curated footer for a live session should show attach\nGot: %q", result)
+	if !strings.Contains(result, "output") {
+		t.Errorf("curated footer for a live session should show Output interaction\nGot: %q", result)
 	}
 }
 
-func TestCuratedFooterLiveSessionShowsAttach(t *testing.T) {
+func TestCuratedFooterLiveSessionShowsOutput(t *testing.T) {
 	home := curatedHome()
 	home.flatItems = []session.Item{
 		{Type: session.ItemTypeSession, Session: &session.Instance{ID: "s1", Tool: "claude", Status: session.StatusRunning}},
@@ -2299,24 +2299,24 @@ func TestCuratedFooterLiveSessionShowsAttach(t *testing.T) {
 	home.cursor = 0
 
 	result := home.renderHelpBar()
-	if !strings.Contains(result, "⏎ attach") {
-		t.Errorf("live session should advertise Enter attach\nGot: %q", result)
+	if !strings.Contains(result, "⏎ output") {
+		t.Errorf("live session should advertise Enter Output\nGot: %q", result)
 	}
-	// Live session shows up to 3 context hints (attach first, then restart, …).
+	// Live session shows up to 3 context hints (Output first, then restart, …).
 	if !strings.Contains(result, "restart") {
-		t.Errorf("live session should advertise restart after attach\nGot: %q", result)
+		t.Errorf("live session should advertise restart after Output\nGot: %q", result)
 	}
-	// Attach must be the first context hint.
-	ai := strings.Index(result, "attach")
+	// Output must be the first context hint.
+	ai := strings.Index(result, "output")
 	ri := strings.Index(result, "restart")
 	if ai == -1 || ri == -1 || ai > ri {
-		t.Errorf("attach should come before restart\nGot: %q", result)
+		t.Errorf("Output should come before restart\nGot: %q", result)
 	}
 }
 
 func TestCuratedFooterCapsContextHints(t *testing.T) {
 	home := curatedHome()
-	// A forkable live session would offer attach/restart/fork; verify the
+	// A forkable live session would offer Output/restart/fork; verify the
 	// curated footer caps context hints at maxCuratedContextHints and never
 	// exceeds it once settings/help are appended.
 	home.flatItems = []session.Item{
@@ -2364,8 +2364,8 @@ func TestCuratedFooterDeadSessionShowsRestart(t *testing.T) {
 	if !strings.Contains(result, "delete") {
 		t.Errorf("dead session should advertise delete as the third action\nGot: %q", result)
 	}
-	if strings.Contains(result, "attach") {
-		t.Errorf("dead session should not advertise attach\nGot: %q", result)
+	if strings.Contains(result, "output") {
+		t.Errorf("dead session should not advertise Output interaction\nGot: %q", result)
 	}
 }
 
@@ -2456,10 +2456,9 @@ func TestCuratedFooterJumpMode(t *testing.T) {
 	}
 }
 
-// TestCuratedFooterRemoteSessionShowsAttach covers PR #1289 review nit 1: a
-// remote-session row must still advertise the attach hint in the curated
-// footer (it attaches over SSH just like a local session).
-func TestCuratedFooterRemoteSessionShowsAttach(t *testing.T) {
+// TestCuratedFooterRemoteSessionShowsOutput covers PR #1289 review nit 1: a
+// remote-session row must still advertise the primary Output hint.
+func TestCuratedFooterRemoteSessionShowsOutput(t *testing.T) {
 	home := curatedHome()
 	home.flatItems = []session.Item{
 		{Type: session.ItemTypeRemoteSession, RemoteSession: &session.RemoteSessionInfo{}},
@@ -2467,14 +2466,14 @@ func TestCuratedFooterRemoteSessionShowsAttach(t *testing.T) {
 	home.cursor = 0
 
 	result := home.renderHelpBar()
-	if !strings.Contains(result, "⏎ attach") {
-		t.Errorf("curated footer for a remote session should advertise Enter attach\nGot: %q", result)
+	if !strings.Contains(result, "⏎ output") {
+		t.Errorf("curated footer for a remote session should advertise Enter Output\nGot: %q", result)
 	}
 }
 
 // TestCuratedFooterQueuedSessionNotAttachable covers PR #1289 review nit 2b: a
 // queued session has no tmux yet, so the curated footer must not advertise
-// "⏎ attach" or "restart" for it — only delete and new make sense.
+// "⏎ output" or "restart" for it — only delete and new make sense.
 func TestCuratedFooterQueuedSessionNotAttachable(t *testing.T) {
 	home := curatedHome()
 	home.flatItems = []session.Item{
@@ -2483,8 +2482,8 @@ func TestCuratedFooterQueuedSessionNotAttachable(t *testing.T) {
 	home.cursor = 0
 
 	result := home.renderHelpBar()
-	if strings.Contains(result, "attach") {
-		t.Errorf("queued session (no tmux yet) must not advertise attach\nGot: %q", result)
+	if strings.Contains(result, "output") {
+		t.Errorf("queued session (no tmux yet) must not advertise Output\nGot: %q", result)
 	}
 	if strings.Contains(result, "restart") {
 		t.Errorf("queued session (nothing running) must not advertise restart\nGot: %q", result)
@@ -2501,7 +2500,7 @@ func TestCuratedFooterQueuedSessionNotAttachable(t *testing.T) {
 func TestCuratedFooterNarrowKeepsSettingsAndHelp(t *testing.T) {
 	home := curatedHome()
 	home.width = 50 // narrow, but still >= layoutBreakpointSingle (curated, not tiny)
-	// Forkable live session → three context hints (attach/restart/fork) that
+	// Forkable live session → three context hints (Output/restart/fork) that
 	// would, together with settings+help, overflow 50 columns.
 	home.flatItems = []session.Item{
 		{Type: session.ItemTypeSession, Session: &session.Instance{
@@ -2532,7 +2531,7 @@ func TestCuratedFooterNarrowKeepsSettingsAndHelp(t *testing.T) {
 func TestFitCuratedHintsAlwaysKeepsGlobals(t *testing.T) {
 	home := curatedHome()
 	globals := []footerHint{{key: "s", label: "settings"}, {key: "?", label: "help"}}
-	ctx := []footerHint{{key: "a", label: "attach"}, {key: "r", label: "restart"}, {key: "f", label: "fork"}}
+	ctx := []footerHint{{key: "a", label: "output"}, {key: "r", label: "restart"}, {key: "f", label: "fork"}}
 
 	// Width too small for any context hint: only globals remain.
 	home.width = 1
@@ -2550,8 +2549,8 @@ func TestFitCuratedHintsAlwaysKeepsGlobals(t *testing.T) {
 	if len(got) != len(ctx)+len(globals) {
 		t.Fatalf("at width=200 expected all %d hints, got %d: %+v", len(ctx)+len(globals), len(got), got)
 	}
-	if got[0].label != "attach" || got[len(got)-1].label != "help" {
-		t.Errorf("expected attach first and help last, got %+v", got)
+	if got[0].label != "output" || got[len(got)-1].label != "help" {
+		t.Errorf("expected Output first and help last, got %+v", got)
 	}
 }
 
@@ -2608,7 +2607,7 @@ func TestFooterUnsetOrUnknownModeRendersHistoricBar(t *testing.T) {
 
 	// The verbose width-adaptive bar (full tier at width 120) renders a
 	// capitalized context title ("Session:") that the curated bar never emits;
-	// the curated bar uses lowercase inline labels ("attach", "settings"). Use
+	// the curated bar uses lowercase inline labels ("output", "settings"). Use
 	// the "Session:" prefix as the distinguishing marker.
 	const historicMarker = "Session:"
 	curated := mkHome(session.FooterCurated).renderHelpBar()
@@ -2811,17 +2810,16 @@ func TestMouseDoubleClickActivatesSession(t *testing.T) {
 	model, _ := home.Update(clickMsg)
 	h := model.(*Home)
 
-	// Second click within 500ms: should trigger attach (returns a command)
+	// Second click within 500ms activates the selected session in place.
 	model, cmd := h.Update(clickMsg)
 	h = model.(*Home)
 
-	// Double-click on a session should attempt attach (produces a command)
-	// The session doesn't have a tmux session, so attachSession returns nil cmd,
-	// but the double-click path resets lastClickIndex
+	// The session has no live tmux pane, so the in-place action schedules its
+	// restart; either way the double-click path resets lastClickIndex.
 	if h.lastClickIndex != -1 {
 		t.Errorf("lastClickIndex = %d after double-click, want -1 (reset)", h.lastClickIndex)
 	}
-	_ = cmd // cmd may be nil since test session has no tmux backing
+	_ = cmd
 }
 
 func TestMouseDoubleClickTogglesGroup(t *testing.T) {

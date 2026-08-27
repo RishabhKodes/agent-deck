@@ -227,8 +227,6 @@ func (h *HelpOverlay) View() string {
 	archiveKey := h.key(hotkeyArchiveSession, "A")
 	unarchiveKey := h.key(hotkeyUnarchiveSession, "Shift+U")
 	viewArchivedKey := h.key(hotkeyViewArchived, "^")
-	detachKey := DetachByteLabel(DetachByteFromBinding(h.key(hotkeyDetach, "ctrl+q")))
-
 	sections := []struct {
 		title string
 		items [][2]string // [key, description]
@@ -236,9 +234,9 @@ func (h *HelpOverlay) View() string {
 		{
 			title: "QUICK START",
 			items: [][2]string{
-				{"Enter", "Attach to selected session"},
+				{"Enter", "Interact with selected session in Output"},
 				{restartKey, "Restart selected session"},
-				{detachKey, "Detach from session"},
+				{"Esc", "Return from Output to navigation"},
 				{helpKey, "Open this help"},
 			},
 		},
@@ -256,8 +254,8 @@ func (h *HelpOverlay) View() string {
 				{"l / Right", "Expand / toggle"},
 				{"1-9", "Jump to root group"},
 				{"Space", "Jump mode"},
-				{"Enter", "Attach / toggle"},
-				{"Shift+Enter", "Open session in new iTerm window (macOS)"},
+				{"Enter", "Interact in Output / toggle group"},
+				{"Shift+Enter", "Interact in Output"},
 			},
 		},
 		{
@@ -292,7 +290,7 @@ func (h *HelpOverlay) View() string {
 				{"< / >", "Shrink / grow preview pane by 5% (drag divider with mouse; vertical in below-orientation)"},
 				{unreadKey, "Mark unread"},
 				{quickApproveKey, "Quick approve (send '1' to Claude)"},
-				{promptSessionKey, "Prompt session (send a one-line prompt without attaching)"},
+				{promptSessionKey, "Prompt session without entering Output interaction"},
 				{reorderUpKeys, "Reorder up (auto-promote at edge)"},
 				{reorderDownKeys, "Reorder down (auto-promote at edge)"},
 				{indentKeys, "Indent / outdent (in group)"},

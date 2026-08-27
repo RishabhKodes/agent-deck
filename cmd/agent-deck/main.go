@@ -287,7 +287,6 @@ func main() {
 	tmux.WarnIfVulnerableTmux()
 
 	var webEnabled bool
-	var classicManagerRequested bool
 	// webHeadless: true when --no-tui is passed to the `web` subcommand.
 	// Skips bubbletea boot (the bulk of ~60 MB RSS) and runs HTTP-server only.
 	var webHeadless bool
@@ -321,13 +320,18 @@ func main() {
 			handleProfile(args[1:])
 			return
 		case "workspace":
-			handleWorkspace(profile, args[1:])
-			return
+			// `workspace` and `manager` are compatibility aliases for the one
+			// unified dashboard. Keep `workspace stop` only so users can clean up
+			// an outer compositor left running by an older build.
+			if len(args) > 1 && args[1] == "stop" {
+				handleWorkspaceStop(profile, args[2:])
+				return
+			}
+			args = stripUnifiedDashboardAlias(args)
 		case "manager":
-			// Keep the original management TUI available explicitly. Remaining
-			// arguments are legacy TUI flags such as --group and --select.
-			classicManagerRequested = true
-			args = args[1:]
+			// Compatibility alias for the same unified dashboard. Remaining
+			// arguments are TUI flags such as --group and --select.
+			args = stripUnifiedDashboardAlias(args)
 		case "__workspace-sidebar":
 			handleWorkspaceSidebar(profile, args[1:])
 			return
@@ -464,13 +468,6 @@ func main() {
 			handleDebugDump()
 			return
 		}
-	}
-
-	// The native workspace dashboard is the primary interactive experience.
-	// Legacy TUI flags still open the classic manager for compatibility.
-	if !classicManagerRequested && !webEnabled && len(args) == 0 {
-		handleWorkspace(profile, nil)
-		return
 	}
 
 	// Every path that reaches this point boots the bubbletea TUI (which
@@ -962,12 +959,10 @@ func main() {
 	ui.DisableKittyKeyboard(os.Stdout)
 	defer ui.RestoreKittyKeyboard(os.Stdout)
 
-	// Issue #1093: also request xterm modifyOtherKeys mode 1 so iTerm2 (and
-	// other xterm-compatible terminals) send Shift+Enter as a distinct
-	// CSI 27;2;13~ sequence instead of plain '\r'. Without this, Bubble Tea
-	// v1.3.10 cannot distinguish Shift+Enter from Enter on a fresh launch,
-	// and the "open in new iTerm window" binding shipped in #1077 falls
-	// through to the in-pane attach handler. Plain Enter is unaffected.
+	// Also request xterm modifyOtherKeys mode 1 so iTerm2 (and other
+	// xterm-compatible terminals) preserve Shift+Enter as a distinct key.
+	// The unified dashboard currently treats it as an alias for Enter, while
+	// preserving the distinction for configurable bindings and text input.
 	ui.EnableModifyOtherKeys(os.Stdout)
 	defer ui.DisableModifyOtherKeys(os.Stdout)
 
@@ -1016,6 +1011,15 @@ func main() {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// stripUnifiedDashboardAlias removes the compatibility command token while
+// preserving all dashboard flags for the single Home TUI bootstrap.
+func stripUnifiedDashboardAlias(args []string) []string {
+	if len(args) > 0 && (args[0] == "workspace" || args[0] == "manager") {
+		return args[1:]
+	}
+	return args
 }
 
 // globalFlagSubcommands lists every token that main()'s dispatch switch treats
@@ -3613,7 +3617,7 @@ func printHelp() {
 	fmt.Println("  --select <id|title>    Launch TUI with cursor on a specific session (all groups stay visible)")
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  (none)           Open the native workspace dashboard")
+	fmt.Println("  (none)           Open the unified dashboard")
 	fmt.Println("  add <path>       Add a new session")
 	fmt.Println("  launch [path]    Add, start, and optionally send a message in one step")
 	fmt.Println("  accounts         List configured named account slots")
@@ -3640,8 +3644,8 @@ func printHelp() {
 	fmt.Println("  agent            Adopt and inspect agent definitions")
 	fmt.Println("  telegram-doctor  Audit channel-owning sessions for telegram drops (#1138)")
 	fmt.Println("  profile          Manage profiles")
-	fmt.Println("  workspace        Open the native workspace dashboard (explicit alias)")
-	fmt.Println("  manager          Open the classic management TUI")
+	fmt.Println("  workspace        Open the unified dashboard (compatibility alias)")
+	fmt.Println("  manager          Open the unified dashboard (compatibility alias)")
 	fmt.Println("  update           Check for and install updates")
 	fmt.Println("  debug-dump       Dump debug ring buffer to file for sharing")
 	fmt.Println("  migrate-paths    Copy legacy ~/.agent-deck files into XDG paths")
@@ -3758,7 +3762,8 @@ func printHelp() {
 	fmt.Println("Keyboard shortcuts (in TUI):")
 	fmt.Println("  n          New session")
 	fmt.Println("  g          New group")
-	fmt.Println("  Enter      Attach to session")
+	fmt.Println("  Enter      Interact with session in Output")
+	fmt.Println("  Esc        Return from Output to navigation")
 	fmt.Println("  m          MCP Manager")
 	fmt.Println("  s          Skills Manager")
 	fmt.Println("  M          Move session to group")
@@ -3767,7 +3772,6 @@ func printHelp() {
 	fmt.Println("  d          Delete session/group")
 	fmt.Println("  S          Settings")
 	fmt.Println("  /          Search")
-	fmt.Println("  Ctrl+Q     Detach from session")
 	fmt.Println("  q          Quit")
 }
 

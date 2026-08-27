@@ -215,7 +215,8 @@ agent-deck mcp attach my-proj exa # Attach MCP to session
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Attach to session |
+| `Enter` | Interact with session in Output |
+| `Esc` | Return from Output to navigation |
 | `n` | New session |
 | `f` / `F` | Fork (quick / dialog) |
 | `m` | MCP Manager |
@@ -478,7 +479,8 @@ agent-deck remove "Codex Review" && agent-deck remove "Gemini Arch"
 |-----|--------|
 | `j/k` or `↑/↓` | Move up/down |
 | `h/l` or `←/→` | Collapse/expand groups |
-| `Enter` | Attach to session |
+| `Enter` | Interact with session in Output |
+| `Esc` | Return from Output to navigation |
 
 ### Session Actions
 | Key | Action |
@@ -1559,7 +1561,8 @@ Complete reference for agent-deck Terminal UI features.
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Attach to session OR toggle group |
+| `Enter` | Interact with session in Output OR toggle group |
+| `Esc` | Return from Output to navigation |
 | `n` | New session (inherits current group) |
 | `r` | Rename session or group |
 | `R` | Restart session (reloads MCPs) |

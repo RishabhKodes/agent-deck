@@ -2,7 +2,6 @@ package workspace
 
 import (
 	"context"
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -15,7 +14,6 @@ type fakePaneController struct {
 	shown     []string
 	activated []string
 	detached  int
-	zooms     []bool
 	chrome    [][2]string
 }
 
@@ -32,14 +30,6 @@ func (f *fakePaneController) ActivateInstance(_ context.Context, id string) erro
 func (f *fakePaneController) FocusAgent(context.Context) error { return nil }
 func (f *fakePaneController) Detach(context.Context) error {
 	f.detached++
-	return nil
-}
-func (f *fakePaneController) ManagerCommand(string, string) *exec.Cmd { return exec.Command("true") }
-func (f *fakePaneController) ClassicAttachCommand(string) *exec.Cmd {
-	return exec.Command("true")
-}
-func (f *fakePaneController) SetZoom(_ context.Context, zoom bool) error {
-	f.zooms = append(f.zooms, zoom)
 	return nil
 }
 func (f *fakePaneController) UpdateChrome(_ context.Context, header, filters string) error {
@@ -191,15 +181,16 @@ func TestSidebarQDetachesWithoutQuittingModel(t *testing.T) {
 	}
 }
 
-func TestManagerCommandUsesExplicitClassicSubcommand(t *testing.T) {
-	controller := &Controller{binaryPath: "/tmp/agent-deck", profile: "work"}
-	cmd := controller.ManagerCommand("session-id", "F")
-	want := "/tmp/agent-deck -p work manager --select session-id"
-	if got := strings.Join(cmd.Args, " "); got != want {
-		t.Fatalf("manager command = %q, want %q", got, want)
-	}
-	if got := strings.Join(cmd.Env, "\n"); !strings.Contains(got, "AGENTDECK_STARTUP_ACTION=F") {
-		t.Fatalf("manager command missing startup action: %s", got)
+func TestLegacySidebarManagerKeysDoNotOpenAnotherScreen(t *testing.T) {
+	model := newSidebarModel("default", &fakePaneController{}, testSidebarItems())
+	for _, key := range []rune{'m', 'n'} {
+		_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{key}})
+		if cmd != nil {
+			t.Fatalf("legacy sidebar key %q launched another screen", key)
+		}
+		if model.err == nil || !strings.Contains(model.err.Error(), "unified dashboard") {
+			t.Fatalf("legacy sidebar key %q did not direct user to unified dashboard: %v", key, model.err)
+		}
 	}
 }
 

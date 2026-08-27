@@ -18,7 +18,9 @@ Complete reference for agent-deck Terminal UI features.
 
 | Key | Action |
 |-----|--------|
-| `Enter` | Attach to session OR toggle group |
+| `Enter` | Interact with session in Output OR toggle group |
+| `Shift+Enter` | Interact with session in Output |
+| `Esc` | Return from Output interaction to list navigation |
 | `n` | New session (inherits current group) |
 | `r` | Rename session or group |
 | `R` | Restart session (reloads MCPs) |
@@ -66,7 +68,6 @@ For remote group headers, `Enter`/`Tab` toggles collapse and `h`/Left collapses 
 | `?` | Help overlay |
 | `i` | Import existing tmux sessions |
 | `Ctrl+R` | Manual refresh |
-| `Ctrl+Q` | Detach (keep tmux running) |
 | `$` | Cost Dashboard |
 | `q` / `Ctrl+C` | Quit |
 
@@ -97,7 +98,7 @@ Federated remote rows currently carry coarse running/waiting/idle/error status; 
 
 Enter-advances is the default (`[ui].new_session_enter_advances = true`), so typing a name and pressing Enter no longer silently creates a session with all defaults. Set `[ui].new_session_enter_advances = false` to restore the legacy Enter-submits behavior; `Ctrl+S` submits in both modes.
 
-Pressing `n` on a remote group/session opens a remote-aware dialog (remote paths and group pre-filled); the session is created over SSH on the remote, never on localhost.
+Pressing `n` on a remote group/session opens a remote-aware dialog (remote paths and group pre-filled); the session is created over SSH on the remote, never on localhost, then selected for interaction in the same Output pane.
 
 Claude New Session defaults are remembered in `$XDG_CONFIG_HOME/agent-deck/config.toml` (default `~/.config/agent-deck/config.toml`) under `[claude]`, except start query and resume IDs, which are per-launch values.
 

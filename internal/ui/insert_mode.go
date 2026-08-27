@@ -41,8 +41,8 @@ const insertPreviewEchoDelay = 60 * time.Millisecond
 // the normal 2s previewCacheTTL so the user sees their own typing promptly.
 type insertPreviewRefreshMsg struct{}
 
-// Insert mode (#1069 feature 1, by @ddorman-dn): vim-style modal type-through
-// for the TUI. After pressing `I` on a focused session, subsequent keystrokes
+// Output interaction (#1069 feature 1, by @ddorman-dn): modal type-through for
+// the TUI. After pressing Enter or `I` on a focused session, keystrokes
 // are forwarded directly to that session's tmux pane via send-keys, instead of
 // being interpreted as TUI commands. Esc returns to normal mode.
 
@@ -73,13 +73,13 @@ func (h *Home) enterInsertMode() bool {
 		if !errors.Is(err, errInsertNoRemoteConfig) {
 			h.insertKeySender = nil
 		} else {
-			h.setError(fmt.Errorf("insert mode: %w", err))
+			h.setError(fmt.Errorf("output interaction: %w", err))
 			return false
 		}
 	} else if err == nil {
 		h.insertKeySender = ks
 	} else {
-		h.setError(fmt.Errorf("insert mode: %w", err))
+		h.setError(fmt.Errorf("output interaction: %w", err))
 		return false
 	}
 
@@ -110,31 +110,31 @@ func (h *Home) enterInsertMode() bool {
 // selection isn't a valid insert-mode target.
 func (h *Home) selectedInsertTarget() (insertTargetRef, bool) {
 	if len(h.flatItems) == 0 || h.cursor >= len(h.flatItems) {
-		h.setError(fmt.Errorf("insert mode: select a session first"))
+		h.setError(fmt.Errorf("output interaction: select a session first"))
 		return insertTargetRef{}, false
 	}
 	item := h.flatItems[h.cursor]
 	switch item.Type {
 	case session.ItemTypeSession:
 		if item.Session == nil {
-			h.setError(fmt.Errorf("insert mode: select a session first"))
+			h.setError(fmt.Errorf("output interaction: select a session first"))
 			return insertTargetRef{}, false
 		}
 		if item.Session.GetTmuxSession() == nil {
-			h.setError(fmt.Errorf("insert mode: session %q has no tmux pane", item.Session.Title))
+			h.setError(fmt.Errorf("output interaction: session %q has no tmux pane", item.Session.Title))
 			return insertTargetRef{}, false
 		}
 		return insertTargetRef{local: item.Session}, true
 	case session.ItemTypeWindow:
 		inst := h.getInstanceByID(item.WindowSessionID)
 		if inst == nil || inst.GetTmuxSession() == nil {
-			h.setError(fmt.Errorf("insert mode: session has no tmux pane"))
+			h.setError(fmt.Errorf("output interaction: session has no tmux pane"))
 			return insertTargetRef{}, false
 		}
-		return insertTargetRef{local: inst}, true
+		return insertTargetRef{local: inst, windowIndex: item.WindowIndex, hasWindow: true}, true
 	case session.ItemTypeRemoteSession:
 		if item.RemoteSession == nil || item.RemoteName == "" {
-			h.setError(fmt.Errorf("insert mode: remote session row is malformed"))
+			h.setError(fmt.Errorf("output interaction: remote session row is malformed"))
 			return insertTargetRef{}, false
 		}
 		return insertTargetRef{
@@ -142,7 +142,7 @@ func (h *Home) selectedInsertTarget() (insertTargetRef, bool) {
 			remoteID:   item.RemoteSession.ID,
 		}, true
 	default:
-		h.setError(fmt.Errorf("insert mode: select a session first"))
+		h.setError(fmt.Errorf("output interaction: select a session first"))
 		return insertTargetRef{}, false
 	}
 }
@@ -433,7 +433,7 @@ func (h *Home) renderInsertModeBar() string {
 		Background(ColorYellow).
 		Bold(true).
 		Padding(0, 1).
-		Render(" -- INSERT -- ")
+		Render(" OUTPUT ACTIVE ")
 
 	infoStyle := lipgloss.NewStyle().Foreground(ColorText)
 	hintStyle := lipgloss.NewStyle().Foreground(ColorComment)
@@ -442,7 +442,7 @@ func (h *Home) renderInsertModeBar() string {
 	if targetTitle != "" {
 		line += " " + infoStyle.Render("→ "+targetTitle)
 	}
-	line += "  " + hintStyle.Render("Esc to exit · Enter to submit")
+	line += "  " + hintStyle.Render("Type directly · Enter to submit · Esc to navigate")
 
 	return lipgloss.JoinVertical(lipgloss.Left, border, line)
 }
