@@ -25,7 +25,7 @@ func TestGroupChange_RootToSubgroup(t *testing.T) {
 	// Create a session in group "alpha".
 	stdout, stderr, code := runAgentDeck(t, home,
 		"add", "-t", "sess-alpha", "-c", "claude", "-g", "alpha",
-		"--no-parent", "--json", projectDir,
+		"--json", projectDir,
 	)
 	if code != 0 {
 		t.Fatalf("add alpha failed (%d)\n%s\n%s", code, stdout, stderr)
@@ -38,7 +38,7 @@ func TestGroupChange_RootToSubgroup(t *testing.T) {
 	// Create a session in group "beta".
 	stdout, stderr, code = runAgentDeck(t, home,
 		"add", "-t", "sess-beta", "-c", "claude", "-g", "beta",
-		"--no-parent", "--json", projectDir,
+		"--json", projectDir,
 	)
 	if code != 0 {
 		t.Fatalf("add beta failed (%d)\n%s\n%s", code, stdout, stderr)
@@ -93,7 +93,7 @@ func TestGroupChange_MoveToRoot(t *testing.T) {
 	// Create a session inside parent/child.
 	stdout, stderr, code := runAgentDeck(t, home,
 		"add", "-t", "nested", "-c", "claude", "-g", "parent/child",
-		"--no-parent", "--json", projectDir,
+		"--json", projectDir,
 	)
 	if code != 0 {
 		t.Fatalf("add nested failed (%d)\n%s\n%s", code, stdout, stderr)
@@ -138,7 +138,7 @@ func TestGroupChange_RejectsCircular(t *testing.T) {
 
 	_, _, code := runAgentDeck(t, home,
 		"add", "-t", "nested", "-c", "claude", "-g", "a/b",
-		"--no-parent", "--json", projectDir,
+		"--json", projectDir,
 	)
 	if code != 0 {
 		t.Fatalf("setup failed (%d)", code)

@@ -156,7 +156,6 @@ func TestAddChannelFlag(t *testing.T) {
 		"-c", "claude",
 		"--channel", "plugin:telegram@user/repo",
 		"--channel", "plugin:discord@user/repo",
-		"--no-parent",
 		"--json",
 		projectDir,
 	)
@@ -217,7 +216,6 @@ func TestSessionShowJSONIncludesChannels(t *testing.T) {
 		"-t", "ch-show-test",
 		"-c", "claude",
 		"--channel", "plugin:telegram@user/repo",
-		"--no-parent",
 		"--json",
 		projectDir,
 	)
@@ -287,7 +285,6 @@ func TestSessionSetChannels(t *testing.T) {
 		"add",
 		"-t", "ch-set-test",
 		"-c", "claude",
-		"--no-parent",
 		"--json",
 		projectDir,
 	)
@@ -358,7 +355,7 @@ func TestChannelsOnlyForClaude(t *testing.T) {
 
 	// --- Positive control: claude session accepts channels. ---
 	stdout, stderr, code := runAgentDeck(t, home,
-		"add", "-t", "ch-claude-ok", "-c", "claude", "--no-parent", "--json", claudeProj,
+		"add", "-t", "ch-claude-ok", "-c", "claude", "--json", claudeProj,
 	)
 	if code != 0 {
 		t.Fatalf("add claude failed (exit %d)\nstdout: %s\nstderr: %s", code, stdout, stderr)
@@ -385,7 +382,7 @@ func TestChannelsOnlyForClaude(t *testing.T) {
 	// --- Negative control: shell session rejects channels with a
 	// tool-specific message. ---
 	stdout, stderr, code = runAgentDeck(t, home,
-		"add", "-t", "ch-shell-reject", "-c", "bash", "--no-parent", "--json", shellProj,
+		"add", "-t", "ch-shell-reject", "-c", "bash", "--json", shellProj,
 	)
 	if code != 0 {
 		t.Fatalf("add shell failed (exit %d)\nstdout: %s\nstderr: %s", code, stdout, stderr)

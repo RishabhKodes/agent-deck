@@ -175,7 +175,7 @@ func (h *Home) jumpToIndex(idx int) {
 		return
 	}
 	h.cursor = idx
-	h.previewScrollOffset = 0
+	h.resetPreviewScroll()
 	h.syncViewport()
 	h.markNavigationActivity()
 }

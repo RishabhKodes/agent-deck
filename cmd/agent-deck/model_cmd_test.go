@@ -37,7 +37,6 @@ func TestAddModelFlagPersistsAndSurfacesInStatus(t *testing.T) {
 		"-t", "model-add-test",
 		"-c", "codex",
 		"--model", "gpt-5.5",
-		"--no-parent",
 		"--json",
 		projectDir,
 	)
@@ -156,7 +155,7 @@ func TestSessionSetModelPersists(t *testing.T) {
 	}
 
 	stdout, stderr, code := runAgentDeck(t, home,
-		"add", "-t", "model-set-test", "-c", "claude", "--no-parent", "--json", projectDir,
+		"add", "-t", "model-set-test", "-c", "claude", "--json", projectDir,
 	)
 	if code != 0 {
 		t.Fatalf("agent-deck add failed (exit %d)\nstdout: %s\nstderr: %s", code, stdout, stderr)

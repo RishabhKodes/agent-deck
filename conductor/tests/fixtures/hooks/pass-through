@@ -1,3 +1,0 @@
-#!/bin/sh
-# Hook that succeeds with no output (pass-through, keeps original message)
-exit 0

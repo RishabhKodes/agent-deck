@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
 func TestUnifiedDashboardActionsCannotLaunchAnotherScreen(t *testing.T) {
@@ -65,65 +63,4 @@ func TestUnifiedDashboardSessionHotkeysOpenOverlaysInPlace(t *testing.T) {
 				got == home, got.mcpDialog.IsVisible(), got.isAttaching.Load())
 		}
 	})
-}
-
-func TestUnifiedDashboardClickingOutputActivatesSelectedSession(t *testing.T) {
-	home := NewHome()
-	home.width = 120
-	home.height = 40
-	home.initialLoading = false
-	home.previewOrientation = PreviewOrientationRight
-	home.insertOpenKeySender = func(insertTargetRef) (insertKeySender, error) {
-		return &fakeInsertKeySender{}, nil
-	}
-	remote := session.RemoteSessionInfo{ID: "remote-1", Title: "remote agent"}
-	home.flatItems = []session.Item{{
-		Type:          session.ItemTypeRemoteSession,
-		RemoteName:    "lab",
-		RemoteSession: &remote,
-	}}
-	home.cursor = 0
-
-	model, _ := home.handleMouse(tea.MouseMsg{
-		X:      home.width - 2,
-		Y:      8,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
-	got := model.(*Home)
-	if !got.insertMode || got.insertModeRemoteName != "lab" || got.insertModeRemoteID != "remote-1" {
-		t.Fatalf("Output click did not activate selected session: active=%v remote=%q id=%q",
-			got.insertMode, got.insertModeRemoteName, got.insertModeRemoteID)
-	}
-}
-
-func TestUnifiedDashboardRemoteCreationActivatesOutputAfterRefresh(t *testing.T) {
-	home := NewHome()
-	home.width = 120
-	home.height = 40
-	home.initialLoading = false
-	home.previewOrientation = PreviewOrientationRight
-	home.insertOpenKeySender = func(insertTargetRef) (insertKeySender, error) {
-		return &fakeInsertKeySender{}, nil
-	}
-	home.remoteGroupsCollapsed["remotes/lab"] = true
-
-	model, refreshCmd := home.Update(remoteSessionCreatedMsg{remoteName: "lab", sessionID: "new-remote"})
-	home = model.(*Home)
-	if refreshCmd == nil {
-		t.Fatal("remote creation did not schedule an in-dashboard list refresh")
-	}
-	remote := session.RemoteSessionInfo{ID: "new-remote", Title: "new agent", Group: "work"}
-	model, _ = home.Update(remoteSessionsFetchedMsg{
-		sessions: map[string][]session.RemoteSessionInfo{"lab": {remote}},
-	})
-	home = model.(*Home)
-
-	if !home.insertMode || home.insertModeRemoteName != "lab" || home.insertModeRemoteID != "new-remote" {
-		t.Fatalf("created remote session did not open in Output: active=%v remote=%q id=%q",
-			home.insertMode, home.insertModeRemoteName, home.insertModeRemoteID)
-	}
-	if home.remoteGroupsCollapsed["remotes/lab"] {
-		t.Fatal("created remote session remained hidden under a collapsed remote")
-	}
 }

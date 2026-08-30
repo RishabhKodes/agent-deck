@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,28 +21,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
-	"golang.org/x/term"
 
 	"github.com/RishabhKodes/agent-deck/internal/costs"
-	"github.com/RishabhKodes/agent-deck/internal/feedback"
 	"github.com/RishabhKodes/agent-deck/internal/git"
-	"github.com/RishabhKodes/agent-deck/internal/intervalhook"
 	"github.com/RishabhKodes/agent-deck/internal/logging"
 	"github.com/RishabhKodes/agent-deck/internal/session"
 	"github.com/RishabhKodes/agent-deck/internal/statedb"
 	"github.com/RishabhKodes/agent-deck/internal/tmux"
 	"github.com/RishabhKodes/agent-deck/internal/ui"
-	"github.com/RishabhKodes/agent-deck/internal/update"
 	"github.com/RishabhKodes/agent-deck/internal/vcs"
-	"github.com/RishabhKodes/agent-deck/internal/web"
 )
 
 var Version = "1.15.0" // overridden at build time via -ldflags "-X main.Version=..."
-
-// This independent fork intentionally has no upstream release channel. Keep
-// every automatic and explicit self-update path disabled until a fork-owned
-// release process is designed and reviewed.
-const forkAutoUpdatesEnabled = false
 
 // Table column widths for list command output
 const (
@@ -59,110 +47,10 @@ func init() {
 	initColorProfile()
 }
 
-// initUpdateSettings configures update checking from user config.
-//
-// Called from main(), NOT from package init(): it loads the user config,
-// which resolves an agent-deck path. Under `go test`, package init runs
-// before TestMain gets to call testutil.IsolateHome(), so an init-time load
-// resolved the developer's REAL config and tripped the agentpaths
-// unsandboxed-test warning on every run of this package (issue #2012).
-func initUpdateSettings() {
-	if !forkAutoUpdatesEnabled {
-		_ = os.Setenv(update.SkipUpdateCheckEnv, "1")
-		_ = os.Setenv("AGENTDECK_DISABLE_FEEDBACK", "1")
-	}
-	settings := session.GetUpdateSettings()
-	update.SetCheckInterval(settings.CheckIntervalHours)
-	update.SetBridgeScriptInstaller(session.InstallBridgeScript)
-	update.SetConductorDirResolver(session.ConductorDir)
-}
-
-// writeVersionOutput prints `Agent Deck vX.Y.Z` to `w`, appending
-// ` (update available: vA.B.C)` when the on-disk cache says the user
-// is behind. Offline — never touches the network. Conductor task #45.
+// writeVersionOutput prints the local source-build version without performing
+// network checks. This fork intentionally has no binary update channel.
 func writeVersionOutput(w io.Writer, currentVersion string) {
-	fmt.Fprintf(w, "Agent Deck v%s", currentVersion)
-	if !forkAutoUpdatesEnabled {
-		fmt.Fprintln(w)
-		return
-	}
-	info, err := update.CachedUpdateInfo(currentVersion)
-	if err == nil && info != nil && info.Available {
-		fmt.Fprintf(w, " (update available: v%s)", info.LatestVersion)
-	}
-	fmt.Fprintln(w)
-}
-
-// printUpdateNotice checks for updates and prints a one-liner if available
-// Uses cache to avoid API calls - only prints if update was already detected
-func printUpdateNotice() {
-	if !forkAutoUpdatesEnabled {
-		return
-	}
-	settings := session.GetUpdateSettings()
-	if !settings.GetCheckEnabled() || !settings.GetNotifyInCLI() {
-		return
-	}
-
-	info, err := update.CheckForUpdate(Version, false)
-	if err != nil || info == nil || !info.Available {
-		return
-	}
-
-	// Print update notice to stderr so it doesn't interfere with JSON output
-	fmt.Fprintf(os.Stderr, "\n💡 Update available: v%s → v%s (run: agent-deck update)\n",
-		info.CurrentVersion, info.LatestVersion)
-}
-
-// promptForUpdate checks for updates and prompts user if auto_update is enabled
-func promptForUpdate() bool {
-	if !forkAutoUpdatesEnabled {
-		return false
-	}
-	settings := session.GetUpdateSettings()
-	if !settings.GetCheckEnabled() {
-		return false
-	}
-
-	info, err := update.CheckForUpdate(Version, false)
-	if err != nil || info == nil || !info.Available {
-		return false
-	}
-
-	// If auto_update is disabled, just show notification (don't prompt)
-	if !settings.AutoUpdate {
-		fmt.Fprintf(os.Stderr, "\n💡 Update available: v%s → v%s (run: agent-deck update)\n",
-			info.CurrentVersion, info.LatestVersion)
-		return false
-	}
-
-	// auto_update is enabled - prompt user
-	fmt.Printf("\n⬆ Update available: v%s → v%s\n", info.CurrentVersion, info.LatestVersion)
-	fmt.Print("Update now? [Y/n]: ")
-
-	var response string
-	_, _ = fmt.Scanln(&response)
-	response = strings.TrimSpace(strings.ToLower(response))
-
-	// Default to yes (empty or "y" or "yes")
-	if response != "" && response != "y" && response != "yes" {
-		fmt.Println("Skipped. Run 'agent-deck update' later.")
-		return false
-	}
-
-	fmt.Println()
-	release, err := update.FetchReleaseByTag(info.LatestVersion)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Update failed: failed to fetch release info: %v\n", err)
-		return false
-	}
-	if err := update.PerformVerifiedUpdate(release, runtime.GOOS, runtime.GOARCH); err != nil {
-		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
-		return false
-	}
-
-	fmt.Println("Restart agent-deck to use the new version.")
-	return true
+	fmt.Fprintf(w, "Agent Deck v%s\n", currentVersion)
 }
 
 // initColorProfile configures lipgloss color profile based on terminal capabilities.
@@ -240,10 +128,6 @@ func main() {
 	// tmux probe below. No-op when tmux is already on PATH.
 	ensureTmuxOnPath()
 
-	// Configure update checking before any command path can reach an update
-	// check (printUpdateNotice, `update`, `version`). See the doc comment.
-	initUpdateSettings()
-
 	// Extract global -p/--profile flag before subcommand dispatch
 	profile, args := extractProfileFlag(os.Args[1:])
 	if profile != "" {
@@ -285,12 +169,6 @@ func main() {
 	// control-mode NULL-deref (tmux #4980, issue #737). Once per process,
 	// no-op on non-macOS, suppressible via AGENTDECK_SUPPRESS_TMUX_WARNING.
 	tmux.WarnIfVulnerableTmux()
-
-	var webEnabled bool
-	// webHeadless: true when --no-tui is passed to the `web` subcommand.
-	// Skips bubbletea boot (the bulk of ~60 MB RSS) and runs HTTP-server only.
-	var webHeadless bool
-	var webOptions webCommandOptions
 
 	// Handle subcommands
 	if len(args) > 0 {
@@ -341,14 +219,8 @@ func main() {
 		case "__workspace-inspector":
 			handleWorkspaceInspector(profile, args[1:])
 			return
-		case "update":
-			handleUpdate(args[1:])
-			return
 		case "session":
 			handleSession(profile, args[1:])
-			return
-		case "fleet":
-			handleFleet(profile, args[1:])
 			return
 		case "mcp":
 			handleMCP(profile, args[1:])
@@ -378,47 +250,12 @@ func main() {
 		case "accounts":
 			handleAccounts(args[1:])
 			return
-		case "conductor":
-			handleConductor(profile, args[1:])
-			return
-		case "agents":
-			handleAgents(profile, args[1:])
-			return
-		case "agent":
-			handleAgent(profile, args[1:])
-			return
-		case "telegram-doctor":
-			handleTelegramDoctor(profile, args[1:])
-			return
-		case "watcher":
-			handleWatcher(profile, args[1:])
-			return
-		case "openclaw", "oc":
-			handleOpenClaw(profile, args[1:])
-			return
-		case "remote":
-			handleRemote(profile, args[1:])
-			return
 		case "worktree", "wt":
 			handleWorktree(profile, args[1:])
 			return
 		case "costs":
 			handleCosts(profile, args[1:])
 			return
-		case "web":
-			webEnabled = true
-			var err error
-			webOptions, err = parseWebCommandOptions(args[1:])
-			if errors.Is(err, flag.ErrHelp) {
-				return
-			}
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error: web flag parsing failed: %v\n", err)
-				os.Exit(1)
-			}
-			webHeadless = webOptions.noTUI
-			ensureTmuxInPathOrExit()
-			// fall through to TUI launch below (or headless server boot if --no-tui)
 		case "uninstall":
 			handleUninstall(args[1:])
 			return
@@ -449,24 +286,15 @@ func main() {
 		case "deepseek":
 			handleDeepSeek(args[1:])
 			return
-		case "notify-daemon":
-			handleNotifyDaemon(args[1:])
-			return
-		case "run-task":
-			handleRunTask(args[1:])
-			return
-		case "inbox":
-			handleInbox(profile, args[1:])
-			return
-		case "feedback":
-			handleFeedback(args[1:])
-			return
-		case "creds-refresh":
-			handleCredsRefresh(args[1:])
-			return
 		case "debug-dump":
 			handleDebugDump()
 			return
+		default:
+			if !strings.HasPrefix(args[0], "-") {
+				fmt.Fprintf(os.Stderr, "Error: unknown command: %s\n", args[0])
+				fmt.Fprintln(os.Stderr, "Run 'agent-deck help' to see supported commands.")
+				os.Exit(2)
+			}
 		}
 	}
 
@@ -475,9 +303,7 @@ func main() {
 	// in raw mode, so a blocking synchronous read here would race the TUI's
 	// own input reader, most likely never return since Enter yields '\r'
 	// under raw mode rather than the '\n' a prompt waits for, and steal
-	// keystrokes either way) and/or runs the web/remote server (a mutation
-	// arriving over HTTP must never block on the operator's terminal, even
-	// a real non-raw one, since nobody is watching it for that request).
+	// keystrokes either way).
 	// Re-resolve the consent config with interactive prompting forced off;
 	// every CLI subcommand that wants the original prompt-on-a-real-terminal
 	// behavior already returned above and never reaches this line.
@@ -495,8 +321,7 @@ func main() {
 
 	// Block TUI launch inside a managed session to prevent infinite nesting.
 	// CLI commands (add, session start/stop, mcp attach, etc.) still work fine.
-	// In headless web mode (--no-tui), no TUI launches, so this guard is skipped.
-	if !webHeadless && isNestedSession() {
+	if isNestedSession() {
 		fmt.Fprintln(os.Stderr, "Error: Cannot launch the agent-deck TUI inside an agent-deck session.")
 		fmt.Fprintln(os.Stderr, "This would create a recursive nested session.")
 		fmt.Fprintln(os.Stderr, "")
@@ -513,9 +338,8 @@ func main() {
 	// Block TUI launch inside a *generic* (non-agentdeck) tmux session (#560).
 	// Detach semantics get confusing when nested: Ctrl+Q returns to the outer
 	// tmux instead of a clean shell. CLI subcommands still work inside tmux —
-	// this guard only fires on the interactive TUI path. Headless web mode
-	// (--no-tui) skips it for the same reason: no TUI, no detach surprise.
-	if !webHeadless && isOuterTmuxWithoutOptIn() {
+	// this guard only fires on the interactive TUI path.
+	if isOuterTmuxWithoutOptIn() {
 		fmt.Fprintln(os.Stderr, "Error: The agent-deck TUI is designed to run OUTSIDE of tmux.")
 		fmt.Fprintln(os.Stderr, "You are inside a tmux session, so Ctrl+Q detach and nested")
 		fmt.Fprintln(os.Stderr, "tmux behavior will be surprising. agent-deck manages its own")
@@ -532,28 +356,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Set version for UI update checking
-	ui.SetVersion(Version)
-
 	// Initialize theme from config (resolves "system" to actual dark/light)
 	theme := session.ResolveTheme()
 	ui.InitTheme(theme)
 
-	// Check for updates and prompt user before launching TUI. Headless web
-	// mode (--no-tui) skips this — it's an interactive prompt that would
-	// hang a non-TTY process.
-	if !webHeadless {
-		if promptForUpdate() {
-			// Update was performed, exit so user can restart with new version
-			return
-		}
-	}
-
-	// Web parses its own flags and preflights during subcommand dispatch so
-	// help remains tmux-free and startup probes see the repaired PATH.
-	if !webEnabled {
-		ensureTmuxInPathOrExit()
-	}
+	ensureTmuxInPathOrExit()
 
 	// Create storage early to register instance via SQLite
 	earlyStorage, err := session.NewStorageWithProfile(profile)
@@ -565,12 +372,8 @@ func main() {
 	}
 
 	// Check if multiple instances are allowed (uses primary election as single-instance gate).
-	// In headless web mode (--no-tui), skip the gate — a headless HTTP server is meant to
-	// coexist with an interactive TUI for the same profile (the whole point of --no-tui), and
-	// the sibling TUI-launch guards above skip the same way. Without this, restarting the web
-	// daemon while a TUI holds the profile primary makes it lose ElectPrimary and exit.
 	instanceSettings := session.GetInstanceSettings()
-	if !webHeadless && !instanceSettings.GetAllowMultiple() {
+	if !instanceSettings.GetAllowMultiple() {
 		if db := statedb.GetGlobal(); db != nil {
 			isFirst, electErr := db.ElectPrimary(30 * time.Second)
 			if electErr == nil && !isFirst {
@@ -590,17 +393,6 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	go func() {
 		<-sigChan
-		// Stop interval hooks and wait for their kill to land. Hook commands
-		// run in their own process groups — intentionally detached from the
-		// terminal's hangup safety net — and only the in-app quit path
-		// (performFinalShutdown) stopped the runner, so a hook mid-run when
-		// the terminal closed or the process was signalled kept running until
-		// its own timeout, stacking one orphan per launch/close cycle (#1829).
-		// Stop blocks (bounded) until in-flight runs are reaped, which is
-		// what makes it safe to os.Exit below.
-		if hooks := intervalhook.GetGlobal(); hooks != nil {
-			hooks.Stop()
-		}
 		// Close control-mode pipes so their tmux clients detach cleanly instead
 		// of orphaning. PipeManager.Close drives the staged EOF teardown, which
 		// avoids the signal-driven detach that races tmux/tmux#4980. The clean
@@ -703,20 +495,6 @@ func main() {
 	// Extract --select flag (#709): preselect a session without scoping groups.
 	var initialSelect string
 	initialSelect, _ = extractSelectFlag(args)
-
-	// v1.7.41: record TUI launch for feedback-prompt pacing. Seeds
-	// FirstSeenAt on the very first launch and bumps LaunchCount on every
-	// subsequent launch, so feedback.ShouldShow can enforce the min-days +
-	// min-launches threshold for new users. Non-TUI subcommands (add, list,
-	// feedback, etc.) deliberately skip this so scripted usage doesn't
-	// inflate the counter.
-	if fbSt, _ := feedback.LoadState(); fbSt != nil {
-		feedback.RecordLaunch(fbSt, time.Now())
-		// #967: migrate pre-existing forever-opt-outs to per-release-series.
-		// Idempotent — no-op once OptOutVersion is set or feedback is enabled.
-		feedback.MigrateLegacyOptOut(fbSt, Version)
-		_ = feedback.SaveState(fbSt)
-	}
 
 	// Start TUI with the specified profile
 	homeModel := ui.NewHomeWithProfileAndMode(profile)
@@ -869,80 +647,6 @@ func main() {
 		}
 	}
 
-	// Start web server alongside TUI if "web" subcommand was used.
-	// When --no-tui is also set, run the HTTP server in the foreground and
-	// skip bubbletea entirely — the perf win that motivated this flag.
-	if webEnabled {
-		// #1790: resolve (and refuse to silently auto-create) the same way
-		// NewStorageWithProfile does. Without this, GetEffectiveProfile
-		// returns a CLAUDE_CONFIG_DIR-inferred name unconditionally, and
-		// passing that concrete name into NewSessionDataService below makes
-		// its own internal NewStorageWithProfile call look like an explicit
-		// -p selection — bypassing the guard and re-opening the exact
-		// silent-empty-profile hole the guard exists to close, just via the
-		// web/headless entry point instead of the CLI/TUI one.
-		effectiveProfile, err := session.ResolveProfileForStorage(profile)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to resolve profile for web server: %v\n", err)
-			os.Exit(1)
-		}
-		fallbackMenuData := web.NewSessionDataService(effectiveProfile)
-		liveMenuData := web.NewMemoryMenuData(fallbackMenuData)
-		homeModel.SetWebMenuData(liveMenuData)
-
-		// #1397: in headless mode no bubbletea loop ever populates the Home's
-		// in-memory registry, so the WebMutator must hydrate it from storage on
-		// each mutation. Flag the model so WebMutator.ensureHydrated activates;
-		// otherwise delete/restart/close/group-mutate on pre-existing sessions
-		// fail ("session not found" / empty-sweep guard).
-		if webHeadless {
-			homeModel.SetHeadless(true)
-		}
-
-		server, err := buildWebServerFromOptions(effectiveProfile, webOptions, liveMenuData, ui.NewWebMutator(homeModel))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: web server setup failed: %v\n", err)
-			os.Exit(1)
-		}
-		if costStore != nil {
-			server.SetCostStore(costStore)
-		}
-
-		if webHeadless {
-			// Headless: block on server.Start() and skip bubbletea. The
-			// HTTP server uses SessionDataService (storage-backed) as a
-			// fallback when MemoryMenuData has no snapshot, so the web UI
-			// reads live data from storage on each request.
-			fmt.Println("Headless mode: TUI disabled")
-			fmt.Printf("Web server: http://%s\n", server.Addr())
-			defer func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				_ = server.Shutdown(ctx)
-			}()
-			if err := server.Start(); err != nil {
-				logging.ForComponent(logging.CompWeb).Error("web_server_error",
-					slog.String("error", err.Error()))
-				fmt.Fprintf(os.Stderr, "Error: web server: %v\n", err)
-				os.Exit(1)
-			}
-			return
-		}
-
-		go func() {
-			if err := server.Start(); err != nil {
-				logging.ForComponent(logging.CompWeb).Error("web_server_error",
-					slog.String("error", err.Error()))
-			}
-		}()
-		fmt.Printf("Web server: http://%s\n", server.Addr())
-		defer func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = server.Shutdown(ctx)
-		}()
-	}
-
 	// Disable the Kitty keyboard protocol before starting the TUI.
 	// Wayland terminals (Ghostty, Foot, Alacritty) send keys using CSI u
 	// encoding by default; Bubble Tea v1.3.10 does not parse those sequences,
@@ -1029,16 +733,14 @@ func stripUnifiedDashboardAlias(args []string) []string {
 // profile flag. KEEP IN SYNC with the switch in main().
 var globalFlagSubcommands = map[string]bool{
 	"add": true, "list": true, "ls": true, "remove": true, "rm": true,
-	"rename": true, "mv": true, "status": true, "profile": true, "update": true,
+	"rename": true, "mv": true, "status": true, "profile": true,
 	"workspace": true, "manager": true, "__workspace-sidebar": true, "__workspace-view": true, "__workspace-inspector": true,
 	"session": true, "mcp": true, "plugin": true, "skill": true, "mcp-proxy": true,
-	"group": true, "try": true, "launch": true, "conductor": true,
-	"telegram-doctor": true, "watcher": true, "openclaw": true, "oc": true,
-	"remote": true, "worktree": true, "wt": true, "costs": true, "web": true,
+	"group": true, "try": true, "launch": true,
+	"worktree": true, "wt": true, "costs": true,
 	"uninstall": true, "migrate-paths": true, "hook-handler": true,
 	"codex-notify": true, "hooks": true, "codex-hooks": true, "gemini-hooks": true,
-	"hermes-hooks": true, "cursor-hooks": true, "deepseek": true, "notify-daemon": true,
-	"run-task": true, "inbox": true, "feedback": true, "creds-refresh": true,
+	"hermes-hooks": true, "cursor-hooks": true, "deepseek": true,
 	"debug-dump": true, "version": true, "help": true,
 }
 
@@ -1366,10 +1068,6 @@ func handleAdd(profile string, args []string) {
 		"",
 		"Wrapper command (use {command} to include tool command, e.g., 'nvim +\"terminal {command}\"')",
 	)
-	parent := fs.String("parent", "", "Parent session (creates sub-session, inherits group)")
-	parentShort := fs.String("p", "", "Parent session (short)")
-	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking (use 'session set-parent' later to link manually)")
-	noTransitionNotify := fs.Bool("no-transition-notify", false, "Suppress transition event notifications to parent session")
 	// #697: conductor-friendly title lock. When set, Claude's session name
 	// (--name / /rename) never overwrites the agent-deck title. --no-title-sync
 	// is an alias for discoverability.
@@ -1380,12 +1078,12 @@ func handleAdd(profile string, args []string) {
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 	quiet := fs.Bool("quiet", false, "Minimal output")
 	quietShort := fs.Bool("q", false, "Minimal output (short)")
-	attach := fs.Bool("attach", false, "Start and attach to the session immediately after creating it (requires an interactive terminal; not supported with --ssh)")
+	attach := fs.Bool("attach", false, "Start and attach to the session immediately after creating it (requires an interactive terminal)")
 
 	// Worktree flags
-	worktreeBranch := fs.String("w", "", "Create session in git worktree for branch (not supported with --ssh)")
-	worktreeBranchLong := fs.String("worktree", "", "Create session in git worktree for branch (not supported with --ssh)")
-	newBranch := fs.Bool("b", false, "Create new branch (use with --worktree; not supported with --ssh)")
+	worktreeBranch := fs.String("w", "", "Create session in git worktree for branch")
+	worktreeBranchLong := fs.String("worktree", "", "Create session in git worktree for branch")
+	newBranch := fs.Bool("b", false, "Create new branch (use with --worktree)")
 	newBranchLong := fs.Bool("new-branch", false, "Create new branch")
 	worktreeLocation := fs.String("location", "", "Worktree location: sibling, subdirectory, or custom path")
 
@@ -1434,10 +1132,6 @@ func handleAdd(profile string, args []string) {
 	sandbox := fs.Bool("sandbox", false, "Run session in Docker sandbox")
 	sandboxImage := fs.String("sandbox-image", "", "Docker image for sandbox (overrides config default)")
 
-	// SSH remote flags
-	sshHost := fs.String("ssh", "", "SSH destination (e.g., user@host)")
-	sshRemotePath := fs.String("remote-path", "", "Remote working directory (used with --ssh)")
-
 	// Resume session flag
 	resumeSession := fs.String("resume-session", "", "Claude session ID to resume (skips new session creation)")
 	modelID := fs.String("model", "", "Model ID/version to use for this session (claude, codex, gemini, opencode)")
@@ -1478,26 +1172,19 @@ func handleAdd(profile string, args []string) {
 		fmt.Println("  agent-deck add -c codex --model gpt-5.5 .")
 		fmt.Println("  agent-deck add -c gemini --model gemini-3.1-pro-preview .")
 		fmt.Println("  agent-deck -p work add               # Add to 'work' profile")
-		fmt.Println("  agent-deck add -t \"Sub-task\" --parent \"Main Project\"  # Create sub-session")
 		fmt.Println("  agent-deck add -t \"Research\" -c claude --mcp memory --mcp sequential-thinking /tmp/x")
 		fmt.Println("  agent-deck add -c codex --mcp memory .  # writes to Codex config.toml")
-		fmt.Println("  agent-deck add -t \"Bot\" -c claude --channel plugin:telegram@user/repo .  # subscribe to plugin channel")
+		fmt.Println("  agent-deck add -t \"Bot\" -c claude --channel plugin:events@user/repo .")
 		fmt.Println("  agent-deck add -c opencode --wrapper \"nvim +'terminal {command}' +'startinsert'\" .")
 		fmt.Println("  agent-deck add -c \"codex --dangerously-bypass-approvals-and-sandbox\" .")
 		fmt.Println("  agent-deck add -c gemini --yolo .")
 		fmt.Println("  agent-deck add -c claude -g work .   # -c is shorthand for --cmd")
-		fmt.Println("  agent-deck add -g ard --no-parent -c claude .")
 		fmt.Println("  agent-deck add --quick -c claude .   # Quick session; TUI shows Claude's live task description")
 		fmt.Println()
 		fmt.Println("Worktree Examples:")
 		fmt.Println("  agent-deck add -w feature/login .    # Create worktree for existing branch")
 		fmt.Println("  agent-deck add -w feature/new -b .   # Create worktree with new branch")
 		fmt.Println("  agent-deck add --worktree fix/bug-123 --new-branch /path/to/repo")
-		fmt.Println()
-		fmt.Println("SSH Examples:")
-		fmt.Println("  agent-deck add --ssh user@host --remote-path /home/user/project -c claude")
-		fmt.Println("  agent-deck add /home/user/project --ssh user@host -c claude   # positional path shortcut for --remote-path; must be absolute")
-		fmt.Println("  agent-deck add --ssh user@host -c claude -t \"remote-dev\"")
 	}
 
 	// Reorder args: move path to end so flags are parsed correctly
@@ -1523,10 +1210,6 @@ func handleAdd(profile string, args []string) {
 	if err := fs.Parse(normalizeArgs(fs, args)); err != nil {
 		os.Exit(1)
 	}
-	if *sshHost != "" && len(pluginFlags) > 0 {
-		fmt.Fprintln(os.Stderr, "Warning: --plugin is persisted but cannot be installed or enabled automatically over SSH; configure the selected plugins in the remote Claude profile.")
-	}
-
 	// Path argument is optional; if omitted with -g/--group, we'll try group default_path.
 	// Fix: sanitize input to remove surrounding quotes that cause issues.
 	rawPathArg := strings.Trim(fs.Arg(0), "'\"")
@@ -1543,19 +1226,12 @@ func handleAdd(profile string, args []string) {
 	// Merge short and long flags
 	sessionTitle := mergeFlags(*title, *titleShort)
 	sessionGroup := mergeFlags(*group, *groupShort)
-	explicitGroupProvided := strings.TrimSpace(sessionGroup) != ""
 	sessionCommandInput := mergeFlags(*command, *commandShort)
 	sessionCommandTool, sessionCommandResolved, sessionWrapperResolved, sessionCommandNote, sessionCommandIsPassthrough, cmdErr := resolveSessionCommand(sessionCommandInput, *wrapper)
 	if cmdErr != nil {
 		fmt.Printf("Error: %v\n", cmdErr)
 		os.Exit(1)
 	}
-	sessionParent := mergeFlags(*parent, *parentShort)
-	if sessionParent != "" && *noParent {
-		fmt.Println("Error: --parent and --no-parent cannot be used together")
-		os.Exit(1)
-	}
-
 	// Validate --resume-session requires Claude
 	if *resumeSession != "" {
 		tool := firstNonEmpty(sessionCommandTool, detectTool(sessionCommandInput))
@@ -1599,40 +1275,6 @@ func handleAdd(profile string, args []string) {
 			if err := storage.SaveGroupsOnly(groupTree); err != nil {
 				fmt.Fprintf(os.Stderr, "warning: failed to persist declarative groups: %v\n", err)
 			}
-		}
-	}
-
-	// Resolve parent session if specified
-	var parentInstance *session.Instance
-	if sessionParent != "" {
-		var errMsg string
-		parentInstance, errMsg, _ = ResolveSession(sessionParent, instances)
-		if parentInstance == nil {
-			fmt.Printf("Error: %s\n", errMsg)
-			os.Exit(1)
-			return // unreachable, satisfies staticcheck SA5011
-		}
-		// Sub-sessions cannot have sub-sessions (single level only)
-		if parentInstance.IsSubSession() {
-			fmt.Printf("Error: cannot create sub-session of a sub-session (single level only)\n")
-			os.Exit(1)
-		}
-		// handleAdd resolves `path` AFTER this block (see below), so the
-		// cwd-derived group is not available here. Passing "" preserves
-		// handleAdd's existing behavior; the #972 cwd-over-parent priority
-		// is wired into `launch` where path is already known at this point.
-		sessionGroup = resolveGroupSelection(sessionGroup, "", parentInstance.GroupPath, explicitGroupProvided, false)
-	} else if !*noParent {
-		var unresolvedParent string
-		parentInstance, unresolvedParent = resolveAutoParentInstanceChecked(instances)
-		if parentInstance == nil && unresolvedParent != "" {
-			fmt.Printf("Error: automatic parent %q could not be resolved; use --parent with a valid session or --no-parent for an intentional top-level session\n", unresolvedParent)
-			os.Exit(1)
-		}
-		if parentInstance != nil && !parentInstance.IsSubSession() {
-			sessionGroup = resolveGroupSelection(sessionGroup, "", parentInstance.GroupPath, explicitGroupProvided, false)
-		} else {
-			parentInstance = nil
 		}
 	}
 
@@ -1680,72 +1322,20 @@ func handleAdd(profile string, args []string) {
 		}
 	}
 
-	// Verify path exists and is a directory (skip for SSH remote sessions)
-	if *sshHost != "" {
-		// An explicitly given path (positional arg, e.g. `add <remote-path>
-		// --ssh <host>`) names the REMOTE working directory when --ssh is in
-		// play: the project lives on the remote host, so this is never a
-		// local path to validate or launch tmux in. Prior to this fix an
-		// explicit positional path was silently dropped on the floor here:
-		// it became the session's local ProjectPath placeholder (nonsensical,
-		// since it names a path that typically doesn't exist locally) while
-		// SSHRemotePath stayed empty, so wrapForSSH never `cd`'d into it and
-		// the session launched in the SSH login shell's default directory
-		// instead of the intended remote worktree. Route it into
-		// --remote-path (an explicit --remote-path flag still wins, matching
-		// the documented `--ssh --remote-path` pattern) and fall back to CWD
-		// as the local placeholder, exactly as the no-positional-path case
-		// already does. Fixes asheshgoplani/agent-deck#1711 / #1710.
-		// A positional path is routed as the RAW argument (rawPathArg, before
-		// resolveAddPath's local ExpandPath/Abs above), never the already
-		// locally-resolved `path`: see resolveSSHAddPaths' doc comment for why
-		// local resolution of a remote path is never correct.
-		if explicitPathProvided && *sshRemotePath != "" {
-			fmt.Fprintf(os.Stderr, "warning: both a positional path (%q) and --remote-path (%q) were given; "+
-				"the positional path is discarded, --remote-path is used\n", rawPathArg, *sshRemotePath)
-		}
-		var localPlaceholder string
-		localPlaceholder, *sshRemotePath, err = resolveSSHAddPaths(explicitPathProvided, rawPathArg, *sshRemotePath)
-		if err != nil {
-			fmt.Printf("Error: %v\n", err)
-			os.Exit(1)
-		}
-		path = localPlaceholder
-	} else {
-		info, err := os.Stat(path)
-		if err != nil {
-			fmt.Printf("Error: path does not exist: %s\n", path)
-			os.Exit(1)
-		}
-		if !info.IsDir() {
-			fmt.Printf("Error: path is not a directory: %s\n", path)
-			os.Exit(1)
-		}
+	// Verify that the local project path exists and is a directory.
+	info, err := os.Stat(path)
+	if err != nil {
+		fmt.Printf("Error: path does not exist: %s\n", path)
+		os.Exit(1)
+	}
+	if !info.IsDir() {
+		fmt.Printf("Error: path is not a directory: %s\n", path)
+		os.Exit(1)
 	}
 
 	// Handle worktree creation
 	var worktreePath, worktreeRepoRoot, worktreeType string
 	if wtBranch != "" {
-		// -w/-b worktree creation is a 100% local filesystem operation
-		// (detectAndCreateBackend + git/jj worktree add below all run against
-		// `path` on THIS machine). Combined with --ssh, `path` at this point
-		// is the local CWD placeholder (see the --ssh branch above), never
-		// the remote repo the director intended. Before this fix that meant
-		// silently creating a worktree in the local Mac's checkout instead of
-		// on the remote host, ignoring --remote-path entirely. Remote
-		// worktree creation over SSH is not yet implemented, so refuse loudly
-		// rather than repeat that silent local-Mac side effect. Workaround:
-		// create the worktree on the remote host directly
-		// (ssh <host> "cd <repo> && git worktree add <path> ..."), then
-		// register it with `agent-deck add --ssh <host> --remote-path <path>`.
-		// Tracking: asheshgoplani/agent-deck#1711 / #1710.
-		if *sshHost != "" {
-			fmt.Fprintln(os.Stderr, "Error: -w/--worktree (and -b) cannot be combined with --ssh; agent-deck cannot create a git worktree on a remote host yet")
-			fmt.Fprintln(os.Stderr, "Workaround: create the worktree on the remote host directly, then register it:")
-			fmt.Fprintln(os.Stderr, "  ssh "+*sshHost+" \"cd <remote-repo> && git worktree add <remote-worktree-path> "+wtBranch+"\"")
-			fmt.Fprintln(os.Stderr, "  agent-deck add --ssh "+*sshHost+" --remote-path <remote-worktree-path> ...")
-			os.Exit(1)
-		}
 		backend, err := detectAndCreateBackend(path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -1873,16 +1463,7 @@ func handleAdd(profile string, args []string) {
 	}
 	instances, groups = freshInstances, freshGroups
 
-	// Where the session will ACTUALLY run. For an --ssh session `path` is only a
-	// local placeholder (it defaults to the controller's working directory), so
-	// deciding identity from it makes every remote session registered from one
-	// directory look co-located with every other one (#1850 case 3). These are
-	// the same two flag values assigned verbatim to the instance below, so the
-	// decision and what gets stored cannot skew.
 	addLocation := localLocation(path)
-	if *sshHost != "" {
-		addLocation = remoteLocation(*sshHost, *sshRemotePath)
-	}
 
 	if isQuick && !userProvidedTitle {
 		// Quick mode: use auto-generated adjective-noun name
@@ -1931,16 +1512,6 @@ func handleAdd(profile string, args []string) {
 		if ts := newInstance.GetTmuxSession(); ts != nil {
 			ts.SocketName = flagSocket
 		}
-	}
-
-	// Set parent if specified (includes parent's project path for --add-dir access)
-	if parentInstance != nil {
-		newInstance.SetParentWithPath(parentInstance.ID, parentInstance.ProjectPath)
-	}
-
-	// Suppress transition notifications if requested
-	if *noTransitionNotify {
-		newInstance.NoTransitionNotify = true
 	}
 
 	// #697/#1615: title-lock blocks Claude's session-name sync. An explicit
@@ -2031,16 +1602,6 @@ func handleAdd(profile string, args []string) {
 		newInstance.Sandbox = session.NewSandboxConfig(*sandboxImage)
 	}
 
-	// Apply SSH remote config if requested.
-	if *sshHost != "" {
-		if *sandbox {
-			fmt.Println("Error: --ssh and --sandbox cannot be used together")
-			os.Exit(1)
-		}
-		newInstance.SSHHost = *sshHost
-		newInstance.SSHRemotePath = *sshRemotePath
-	}
-
 	// Handle --resume-session: set Claude session ID and resume mode
 	if *resumeSession != "" {
 		newInstance.ClaudeSessionID = *resumeSession
@@ -2120,15 +1681,10 @@ func handleAdd(profile string, args []string) {
 	// --attach: create → start → attach, so `add --attach` "instantly opens"
 	// the new session in one step. Refused loudly (never silently) under
 	// --json or without an interactive terminal; the session is left created
-	// and started in those cases. Remote (ssh) sessions use a different attach
-	// path and are out of scope here.
+	// and started in those cases.
 	if *attach {
 		if *jsonOutput {
 			out.Error("--attach cannot be combined with --json; session was created", ErrCodeInvalidOperation)
-			os.Exit(3)
-		}
-		if *sshHost != "" {
-			out.Error("--attach is not supported with --ssh (remote sessions); session was created", ErrCodeInvalidOperation)
 			os.Exit(3)
 		}
 		if err := newInstance.Start(); err != nil {
@@ -2170,18 +1726,9 @@ func handleAdd(profile string, args []string) {
 	if len(mcpFlags) > 0 {
 		humanLines = append(humanLines, fmt.Sprintf("  MCPs:    %s", strings.Join(mcpFlags, ", ")))
 	}
-	if parentInstance != nil {
-		humanLines = append(humanLines, fmt.Sprintf("  Parent:  %s (%s)", parentInstance.Title, parentInstance.ID[:8]))
-	}
 	if worktreePath != "" {
 		humanLines = append(humanLines, fmt.Sprintf("  Worktree: %s (branch: %s)", worktreePath, wtBranch))
 		humanLines = append(humanLines, fmt.Sprintf("  Repo:    %s", worktreeRepoRoot))
-	}
-	if *sshHost != "" {
-		humanLines = append(humanLines, fmt.Sprintf("  SSH:     %s", *sshHost))
-		if *sshRemotePath != "" {
-			humanLines = append(humanLines, fmt.Sprintf("  Remote:  %s", *sshRemotePath))
-		}
 	}
 	if *resumeSession != "" {
 		humanLines = append(humanLines, fmt.Sprintf("  Resume:  %s", *resumeSession))
@@ -2218,10 +1765,6 @@ func handleAdd(profile string, args []string) {
 	}
 	if len(mcpFlags) > 0 {
 		jsonData["mcps"] = mcpFlags
-	}
-	if parentInstance != nil {
-		jsonData["parent_id"] = parentInstance.ID
-		jsonData["parent_title"] = parentInstance.Title
 	}
 	if worktreePath != "" {
 		jsonData["worktree_path"] = worktreePath
@@ -2310,6 +1853,7 @@ func handleList(profile string, args []string) {
 		fmt.Printf("Error: failed to load sessions: %v\n", err)
 		os.Exit(1)
 	}
+	instances = localInstancesOnly(instances)
 
 	if len(instances) == 0 {
 		fmt.Printf("No sessions found in profile '%s'.\n", storage.Profile())
@@ -2407,8 +1951,6 @@ func handleList(profile string, args []string) {
 	}
 	fmt.Printf("\nTotal: %d sessions\n", len(instances))
 
-	// Show update notice if available
-	printUpdateNotice()
 }
 
 // handleListAllProfiles lists sessions from all profiles
@@ -2450,6 +1992,7 @@ func handleListAllProfiles(jsonOutput bool) {
 			if err != nil {
 				continue
 			}
+			instances = localInstancesOnly(instances)
 			for _, inst := range instances {
 				allSessions = append(allSessions, sessionJSON{
 					ID:                inst.ID,
@@ -2488,6 +2031,7 @@ func handleListAllProfiles(jsonOutput bool) {
 		if err != nil {
 			continue
 		}
+		instances = localInstancesOnly(instances)
 
 		if len(instances) == 0 {
 			continue
@@ -2654,18 +2198,6 @@ func handleRemove(profile string, args []string) {
 	if err := storage.RemoveSessionAndVerify(removedID, newInstances, groupTree); err != nil {
 		out.Error(fmt.Sprintf("failed to remove session: %v", err), ErrCodeInvalidOperation)
 		os.Exit(1)
-	}
-
-	// Best-effort post-removal cleanup for transition-notifier state
-	// (issue #910). Failures are warned but do not block the rm — the
-	// SQLite removal is the user-visible contract.
-	if swept, err := session.SweepInboxesForChildSession(removedID); err != nil && !*jsonOutput {
-		fmt.Fprintf(os.Stderr, "warn: inbox sweep for %s failed: %v\n", removedID, err)
-	} else if swept > 0 && !*jsonOutput {
-		fmt.Fprintf(os.Stderr, "swept %d stale inbox event(s) for removed session\n", swept)
-	}
-	if _, err := session.RemoveNotifyStateRecord(removedID); err != nil && !*jsonOutput {
-		fmt.Fprintf(os.Stderr, "warn: notify-state sweep for %s failed: %v\n", removedID, err)
 	}
 
 	out.Success(
@@ -2890,6 +2422,7 @@ func handleStatus(profile string, args []string) {
 		fmt.Printf("Error: failed to load sessions: %v\n", err)
 		os.Exit(1)
 	}
+	instances = localInstancesOnly(instances)
 
 	if len(instances) == 0 {
 		if *jsonOutput {
@@ -3005,10 +2538,6 @@ func handleStatus(profile string, args []string) {
 			counts.waiting, counts.running, counts.idle)
 	}
 
-	// Show update notice if available (skip for JSON/quiet output)
-	if !*jsonOutput && !*quiet && !*quietShort {
-		printUpdateNotice()
-	}
 }
 
 // handleProfile manages profiles (list, create, delete, default)
@@ -3264,515 +2793,35 @@ func handleProfileSetDefault(out *CLIOutput, name string) {
 	})
 }
 
-// handleUpdate checks for and performs updates
-func handleUpdate(args []string) {
-	if !forkAutoUpdatesEnabled {
-		fmt.Println("Updates are disabled in this independent Agent Deck fork.")
-		fmt.Println("Build and install updates from https://github.com/RishabhKodes/agent-deck.")
-		return
-	}
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
-	checkOnly := fs.Bool("check", false, "Only check for updates, don't install")
-	targetVersion := fs.String("version", "", "Install a specific released version (e.g. 1.7.3); may be a downgrade")
-
-	fs.Usage = func() {
-		fmt.Println("Usage: agent-deck update [options]")
-		fmt.Println()
-		fmt.Println("Check for and install updates (always checks GitHub for latest).")
-		fmt.Println()
-		fmt.Println("Options:")
-		fs.PrintDefaults()
-		fmt.Println()
-		fmt.Println("Examples:")
-		fmt.Println("  agent-deck update              # Check and install latest if available")
-		fmt.Println("  agent-deck update --check      # Only check, don't install")
-		fmt.Println("  agent-deck update --version 1.7.3  # Install a specific version (may downgrade)")
-	}
-
-	if err := fs.Parse(normalizeArgs(fs, args)); err != nil {
-		os.Exit(1)
-	}
-
-	if strings.TrimSpace(*targetVersion) != "" {
-		handleUpdateToSpecificVersion(*targetVersion, *checkOnly)
-		return
-	}
-
-	fmt.Printf("Agent Deck v%s\n", Version)
-	fmt.Println("Checking for updates...")
-
-	// Always force check when user explicitly runs 'update' command
-	// Cache is only useful for background checks (TUI startup), not explicit requests
-	info, err := update.CheckForUpdate(Version, true)
-	if err != nil {
-		fmt.Printf("Error checking for updates: %v\n", err)
-		os.Exit(1)
-	}
-
-	// #1759: a release is visible on GitHub before its binaries finish
-	// uploading. CheckForUpdate degrades to the newest installable release and
-	// reports the in-flight one here, so say that plainly instead of either
-	// erroring out or implying the user is already current.
-	if info.PublishingVersion != "" {
-		fmt.Printf("\nℹ v%s was just released but its binaries are not attached yet.\n", info.PublishingVersion)
-		fmt.Println("  Re-run `agent-deck update` in a few minutes to get it.")
-	}
-
-	if !info.Available {
-		fmt.Println("✓ You're running the latest version!")
-		return
-	}
-
-	fmt.Printf("\n⬆ Update available: v%s → v%s\n", info.CurrentVersion, info.LatestVersion)
-	fmt.Printf("  Release: %s\n", info.ReleaseURL)
-
-	// Fetch and display changelog
-	displayChangelog(info.CurrentVersion, info.LatestVersion)
-
-	installPath, homebrewUpgradeCmd, homebrewManaged, hbErr := update.DetectHomebrewManagedInstall()
-	if hbErr != nil {
-		// Non-fatal: fall back to direct updater flow.
-		homebrewManaged = false
-	}
-	homebrewInstallCmd := homebrewUpgradeCmd
-	if homebrewManaged {
-		homebrewInstallCmd = fmt.Sprintf("brew update && %s", homebrewUpgradeCmd)
-	}
-
-	if *checkOnly {
-		if homebrewManaged {
-			fmt.Printf("\nHomebrew-managed install detected at %s\n", installPath)
-			fmt.Printf("Run `%s` to install.\n", homebrewInstallCmd)
-		} else {
-			fmt.Println("\nRun 'agent-deck update' to install.")
-		}
-		return
-	}
-
-	if homebrewManaged {
-		fmt.Printf("\nHomebrew-managed install detected at %s\n", installPath)
-		fmt.Printf("Will run: %s\n", homebrewInstallCmd)
-	}
-
-	// Confirm update - drain any buffered input first to avoid garbage
-	drainStdin()
-	if homebrewManaged {
-		fmt.Print("\nInstall update via Homebrew now? [Y/n] ")
-	} else {
-		fmt.Print("\nInstall update? [Y/n] ")
-	}
-	reader := bufio.NewReader(os.Stdin)
-	response, _ := reader.ReadString('\n')
-	response = strings.TrimSpace(response)
-	if response != "" && response != "y" && response != "Y" {
-		fmt.Println("Update cancelled.")
-		return
-	}
-
-	// Perform update (direct binary replacement or Homebrew upgrade)
-	fmt.Println()
-	if homebrewManaged {
-		if err := runHomebrewUpgradeWithRefresh(homebrewUpgradeCmd); err != nil {
-			fmt.Printf("Error installing update via Homebrew: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		release, err := update.FetchReleaseByTag(info.LatestVersion)
-		if err != nil {
-			fmt.Printf("Error installing update: failed to fetch release info: %v\n", err)
-			os.Exit(1)
-		}
-		if err := update.PerformVerifiedUpdate(release, runtime.GOOS, runtime.GOARCH); err != nil {
-			fmt.Printf("Error installing update: %v\n", err)
-			os.Exit(1)
-		}
-	}
-
-	// Update bridge.py if conductor is installed
-	if err := update.UpdateBridgePy(); err != nil {
-		fmt.Printf("Warning: Failed to update bridge.py: %v\n", err)
-		fmt.Println("  You can manually refresh it with: agent-deck conductor setup <name>")
-	}
-
-	fmt.Printf("\n✓ Updated to v%s\n", info.LatestVersion)
-	fmt.Println("  Restart agent-deck to use the new version.")
-
-	// Offer to update remotes
-	updateRemotesAfterLocalUpdate(info.LatestVersion)
-}
-
-// handleUpdateToSpecificVersion installs a user-specified release version.
-// Unlike the default update flow, this bypasses the "is this newer?" check so
-// callers can reinstall or downgrade to a prior release on purpose.
-func handleUpdateToSpecificVersion(requested string, checkOnly bool) {
-	fmt.Printf("Agent Deck v%s\n", Version)
-
-	normalized := update.NormalizeReleaseTag(requested)
-	if normalized == "" {
-		fmt.Println("Error: --version requires a non-empty version (e.g. 1.7.3)")
-		os.Exit(1)
-	}
-	targetVersion := strings.TrimPrefix(normalized, "v")
-
-	installPath, homebrewUpgradeCmd, homebrewManaged, hbErr := update.DetectHomebrewManagedInstall()
-	if hbErr != nil {
-		homebrewManaged = false
-	}
-	if homebrewManaged {
-		fmt.Printf("\nHomebrew-managed install detected at %s\n", installPath)
-		fmt.Printf("Pinning to a specific version is not supported via this command.\n")
-		fmt.Printf("Use Homebrew directly, or run `%s` for the latest.\n", homebrewUpgradeCmd)
-		os.Exit(1)
-	}
-
-	fmt.Printf("Fetching release %s...\n", normalized)
-	release, err := update.FetchReleaseByTag(normalized)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	downloadURL := update.GetAssetURLForPlatform(release, runtime.GOOS, runtime.GOARCH)
-	if downloadURL == "" {
-		fmt.Printf("Error: release %s has no binary for %s/%s\n", normalized, runtime.GOOS, runtime.GOARCH)
-		os.Exit(1)
-	}
-
-	cmp := update.CompareVersions(Version, targetVersion)
-	switch {
-	case cmp == 0:
-		fmt.Printf("\n↻ Reinstalling v%s (current = requested)\n", targetVersion)
-	case cmp < 0:
-		fmt.Printf("\n⬆ Installing v%s → v%s\n", Version, targetVersion)
-	default:
-		fmt.Printf("\n⬇ Downgrading v%s → v%s\n", Version, targetVersion)
-	}
-	fmt.Printf("  Release: %s\n", release.HTMLURL)
-
-	if checkOnly {
-		fmt.Println("\nRun without --check to install.")
-		return
-	}
-
-	drainStdin()
-	defaultYes := cmp <= 0
-	prompt := fmt.Sprintf("\nInstall v%s now? [Y/n] ", targetVersion)
-	if !defaultYes {
-		prompt = fmt.Sprintf("\nDowngrade to v%s now? [y/N] ", targetVersion)
-	}
-	fmt.Print(prompt)
-	reader := bufio.NewReader(os.Stdin)
-	response, _ := reader.ReadString('\n')
-	response = strings.TrimSpace(strings.ToLower(response))
-
-	confirmed := response == "y" || response == "yes" || (defaultYes && response == "")
-	if !confirmed {
-		fmt.Println("Update cancelled.")
-		return
-	}
-
-	fmt.Println()
-	if err := update.PerformVerifiedUpdate(release, runtime.GOOS, runtime.GOARCH); err != nil {
-		fmt.Printf("Error installing v%s: %v\n", targetVersion, err)
-		os.Exit(1)
-	}
-
-	if err := update.UpdateBridgePy(); err != nil {
-		fmt.Printf("Warning: Failed to update bridge.py: %v\n", err)
-		fmt.Println("  You can manually refresh it with: agent-deck conductor setup <name>")
-	}
-
-	fmt.Printf("\n✓ Installed v%s\n", targetVersion)
-	fmt.Println("  Restart agent-deck to use this version.")
-}
-
-// brewRunner abstracts `brew <args...>` so tests can inject canned output
-// without touching the real binary. The contract: return the combined
-// stdout+stderr captured from the invocation, plus the process exit error
-// (nil on exit 0). Implementations may also tee output to the terminal so
-// the user still sees brew's live progress.
-type brewRunner interface {
-	Run(args ...string) ([]byte, error)
-}
-
-// execBrewRunner is the production runner: it invokes the real `brew` binary
-// and tees its output to the user's terminal while capturing a copy for the
-// post-run inspection that #954 requires.
-type execBrewRunner struct{ bin string }
-
-func (e *execBrewRunner) Run(args ...string) ([]byte, error) {
-	// #nosec G204 -- e.bin is an internal path (typically "brew") chosen by
-	// the install path resolver; args are constructed by the brew_cmd.go
-	// runner, not from external input.
-	cmd := exec.Command(e.bin, args...)
-	cmd.Stdin = os.Stdin
-	var buf bytes.Buffer
-	cmd.Stdout = io.MultiWriter(os.Stdout, &buf)
-	cmd.Stderr = io.MultiWriter(os.Stderr, &buf)
-	err := cmd.Run()
-	return buf.Bytes(), err
-}
-
-func runHomebrewUpgradeWithRefresh(homebrewUpgradeCmd string) error {
-	cmdParts := strings.Fields(homebrewUpgradeCmd)
-	if len(cmdParts) == 0 {
-		return fmt.Errorf("empty Homebrew upgrade command")
-	}
-	return runHomebrewUpgradeWith(&execBrewRunner{bin: cmdParts[0]}, homebrewUpgradeCmd)
-}
-
-// runHomebrewUpgradeWith executes `brew update` then `brew <upgrade args>` via
-// the supplied runner. It fails loudly when brew exits 0 but its output shows
-// the formula was refused (e.g. "Warning: agent-deck X.Y.Z already installed")
-// — see #954, reported by @alexandergharibian.
-func runHomebrewUpgradeWith(r brewRunner, homebrewUpgradeCmd string) error {
-	cmdParts := strings.Fields(homebrewUpgradeCmd)
-	if len(cmdParts) == 0 {
-		return fmt.Errorf("empty Homebrew upgrade command")
-	}
-
-	if _, err := r.Run("update"); err != nil {
-		return fmt.Errorf("failed to refresh Homebrew metadata: %w", err)
-	}
-
-	out, err := r.Run(cmdParts[1:]...)
-	if err != nil {
-		return fmt.Errorf("failed to run `%s`: %w", homebrewUpgradeCmd, err)
-	}
-
-	if brewRefusedUpgrade(string(out)) {
-		return fmt.Errorf(
-			"brew did not upgrade agent-deck; the tap formula may be stale (#954). "+
-				"Try `brew untap asheshgoplani/tap && brew tap asheshgoplani/tap && %s`, "+
-				"or download the latest release directly from GitHub. brew output: %s",
-			homebrewUpgradeCmd,
-			strings.TrimSpace(string(out)),
-		)
-	}
-
-	return nil
-}
-
-// brewRefusedUpgrade reports whether `brew upgrade` output indicates brew
-// declined to install a new version. Brew prints "Warning: <formula> X.Y.Z
-// already installed" and exits 0 in that case — exactly the lying-success
-// path that #954 surfaced.
-func brewRefusedUpgrade(output string) bool {
-	return strings.Contains(strings.ToLower(output), "already installed")
-}
-
-// displayChangelog fetches and displays changelog between versions
-func displayChangelog(currentVersion, latestVersion string) {
-	changelog, err := update.FetchChangelog()
-	if err != nil {
-		fmt.Println("\n  (Could not fetch changelog. See release notes at the URL above.)")
-		return
-	}
-
-	entries := update.ParseChangelog(changelog)
-	changes := update.GetChangesBetweenVersions(entries, currentVersion, latestVersion)
-
-	if len(changes) > 0 {
-		fmt.Print(update.FormatChangelogForDisplay(changes))
-	}
-}
-
-// drainStdin discards any pending input in stdin to prevent garbage from being read
-// This is needed before prompts because ANSI escape sequences or user keypresses
-// may have buffered during the changelog display
-func drainStdin() {
-	fd := int(os.Stdin.Fd())
-	if !term.IsTerminal(fd) {
-		return
-	}
-
-	// Use TCIFLUSH via ioctl to flush the terminal input queue
-	// This is the proper Unix way to discard pending input
-	// TCIFLUSH = 0 (flush input), TCIOFLUSH = 2 (flush both)
-	// The syscall is: ioctl(fd, TCFLSH, TCIFLUSH)
-	// On macOS/Darwin, TCFLSH = 0x80047410 (from termios.h)
-	// On Linux, TCFLSH = 0x540B
-	const (
-		tcflshDarwin = 0x80047410
-		tcflshLinux  = 0x540B
-		tciflush     = 0 // flush input queue
-	)
-
-	// Try Darwin first, then Linux
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), tcflshDarwin, tciflush)
-	if errno != 0 {
-		_, _, _ = syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), tcflshLinux, tciflush)
-	}
-}
-
 func printHelp() {
 	fmt.Printf("Agent Deck v%s\n", Version)
-	fmt.Println("Terminal session manager for AI coding agents")
+	fmt.Println("Local terminal session manager for AI coding agents")
 	fmt.Println()
-	fmt.Println("Usage: agent-deck [-p profile] [-g group] [--select id|title] [command]")
-	fmt.Println()
-	fmt.Println("Global Options:")
-	fmt.Println("  -p, --profile <name>   Use specific profile (default: 'default')")
-	fmt.Println("  -g, --group <name>     Launch TUI scoped to a specific group")
-	fmt.Println("  --select <id|title>    Launch TUI with cursor on a specific session (all groups stay visible)")
+	fmt.Println("Usage: agent-deck [-p profile] [command]")
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  (none)           Open the unified dashboard")
-	fmt.Println("  add <path>       Add a new session")
-	fmt.Println("  launch [path]    Add, start, and optionally send a message in one step")
-	fmt.Println("  accounts         List configured named account slots")
-	fmt.Println("  try <name>       Quick experiment (create/find dated folder + session)")
-	fmt.Println("  list, ls         List all sessions")
-	fmt.Println("  remove, rm       Remove a session")
-	fmt.Println("  rename, mv       Rename a session")
-	fmt.Println("  status           Show session status summary")
-	fmt.Println("  session          Manage session lifecycle")
-	fmt.Println("  fleet            Detect and recover from a fleet-wide session death")
-	fmt.Println("  mcp              Manage MCP servers")
-	fmt.Println("  skill            Manage project skills")
-	fmt.Println("  codex-hooks      Manage Codex notify hook integration")
-	fmt.Println("  gemini-hooks     Manage Gemini hook integration")
-	fmt.Println("  hermes-hooks     Manage Hermes Agent hook integration")
-	fmt.Println("  cursor-hooks     Manage Cursor Agent CLI hook integration")
-	fmt.Println("  deepseek         Inspect the DeepSeek Harness (dsh) integration")
-	fmt.Println("  group            Manage groups")
-	fmt.Println("  worktree, wt     Manage git worktrees")
-	fmt.Println("  web              Start TUI with web UI server running alongside")
-	fmt.Println("  remote           Manage remote agent-deck instances")
-	fmt.Println("  conductor        Manage conductor meta-agent orchestration")
-	fmt.Println("  agents           List adopted agents, grouped by machine")
-	fmt.Println("  agent            Adopt and inspect agent definitions")
-	fmt.Println("  telegram-doctor  Audit channel-owning sessions for telegram drops (#1138)")
-	fmt.Println("  profile          Manage profiles")
-	fmt.Println("  workspace        Open the unified dashboard (compatibility alias)")
-	fmt.Println("  manager          Open the unified dashboard (compatibility alias)")
-	fmt.Println("  update           Check for and install updates")
-	fmt.Println("  debug-dump       Dump debug ring buffer to file for sharing")
-	fmt.Println("  migrate-paths    Copy legacy ~/.agent-deck files into XDG paths")
-	fmt.Println("  uninstall        Uninstall Agent Deck")
-	fmt.Println("  version          Show version")
-	fmt.Println("  help             Show this help")
+	fmt.Println("  (none)              Open the dashboard")
+	fmt.Println("  add [path]          Register a local session")
+	fmt.Println("  launch [path]       Register, start, and optionally prompt a session")
+	fmt.Println("  list, ls             List local sessions")
+	fmt.Println("  status              Show local session status")
+	fmt.Println("  session             Manage session lifecycle")
+	fmt.Println("  group               Manage groups")
+	fmt.Println("  worktree, wt        Manage git worktrees")
+	fmt.Println("  mcp                 Manage MCP servers")
+	fmt.Println("  skill               Manage project skills")
+	fmt.Println("  profile             Manage profiles")
+	fmt.Println("  codex-hooks         Manage Codex notify hooks")
+	fmt.Println("  gemini-hooks        Manage Gemini hooks")
+	fmt.Println("  hermes-hooks        Manage Hermes hooks")
+	fmt.Println("  cursor-hooks        Manage Cursor hooks")
+	fmt.Println("  deepseek            Inspect DeepSeek integration")
+	fmt.Println("  uninstall           Uninstall Agent Deck")
+	fmt.Println("  version             Show version")
+	fmt.Println("  help                Show this help")
 	fmt.Println()
-	fmt.Println("Session Commands:")
-	fmt.Println("  session start <id>        Start a session's tmux process")
-	fmt.Println("  session stop <id>         Stop session process")
-	fmt.Println("  session restart <id>      Restart session (reload MCPs)")
-	fmt.Println("  session fork <id>         Fork Claude or Pi session with context")
-	fmt.Println("  session attach <id>       Attach to session interactively")
-	fmt.Println("  session show [id]         Show session details")
-	fmt.Println()
-	fmt.Println("Fleet Recovery Commands:")
-	fmt.Println("  fleet status              Report sessions whose panes are gone (read-only)")
-	fmt.Println("  fleet recover             Plan a sequential recovery sweep (add --yes to run it)")
-	fmt.Println()
-	fmt.Println("MCP Commands:")
-	fmt.Println("  mcp list                  List available MCPs from config.toml")
-	fmt.Println("  mcp attached [id]         Show MCPs attached to a session")
-	fmt.Println("  mcp attach <id> <mcp>     Attach MCP to session")
-	fmt.Println("  mcp detach <id> <mcp>     Detach MCP from session")
-	fmt.Println()
-	fmt.Println("Skill Commands:")
-	fmt.Println("  skill list                List discoverable skills")
-	fmt.Println("  skill attached [id]       Show skills attached to a session")
-	fmt.Println("  skill attach <id> <name>  Attach skill to session project")
-	fmt.Println("  skill detach <id> <name>  Detach skill from session project")
-	fmt.Println("  skill source list         List global skill sources")
-	fmt.Println()
-	fmt.Println("Codex Hook Commands:")
-	fmt.Println("  codex-hooks install       Install or upgrade Codex notify hook")
-	fmt.Println("  codex-hooks uninstall     Remove Codex notify hook")
-	fmt.Println("  codex-hooks status        Show Codex hook install status")
-	fmt.Println("  gemini-hooks install      Install Gemini hooks")
-	fmt.Println("  gemini-hooks uninstall    Remove Gemini hooks")
-	fmt.Println("  gemini-hooks status       Show Gemini hooks install status")
-	fmt.Println("  hermes-hooks install      Install Hermes Agent hooks")
-	fmt.Println("  hermes-hooks uninstall    Remove Hermes Agent hooks")
-	fmt.Println("  hermes-hooks status       Show Hermes hooks install status")
-	fmt.Println("  cursor-hooks install      Install Cursor hooks")
-	fmt.Println("  cursor-hooks uninstall    Remove Cursor hooks")
-	fmt.Println("  cursor-hooks status       Show Cursor hooks install status")
-	fmt.Println("  deepseek status           Show resolved dsh binary, DSH_HOME, profile")
-	fmt.Println("  deepseek profiles         List profiles under $DSH_HOME/profiles")
-	fmt.Println("  deepseek sessions [path]  List dsh sessions recorded for a workspace")
-	fmt.Println()
-	fmt.Println("Group Commands:")
-	fmt.Println("  group list                List all groups")
-	fmt.Println("  group create <name>       Create a new group")
-	fmt.Println("  group delete <name>       Delete a group")
-	fmt.Println("  group move <id> <group>   Move session to group")
-	fmt.Println()
-	fmt.Println("Conductor Commands:")
-	fmt.Println("  conductor setup           Set up conductor (Telegram bridge + sessions)")
-	fmt.Println("  conductor teardown        Stop conductor and remove bridge daemon")
-	fmt.Println("  conductor status          Show conductor health across profiles")
-	fmt.Println("  conductor list            List configured conductors")
-	fmt.Println()
-	fmt.Println("Remote Commands:")
-	fmt.Println("  remote add <name> <user@host>             Register a remote agent-deck instance")
-	fmt.Println("    --agent-deck-path <path>                Path to agent-deck binary on remote (default: agent-deck)")
-	fmt.Println("    --profile <name>                        Remote profile to use (default: default)")
-	fmt.Println("  remote remove, rm <name>                  Remove a remote")
-	fmt.Println("  remote list, ls [--json]                  List configured remotes")
-	fmt.Println("  remote sessions [name] [--json]           Show sessions on remote(s)")
-	fmt.Println("  remote attach <name> <session>            Attach to a remote session")
-	fmt.Println("  remote rename <name> <session> <title>    Rename a remote session")
-	fmt.Println("  remote update [name]                      Install/upgrade agent-deck on remote(s)")
-	fmt.Println()
-	fmt.Println("Worktree Commands:")
-	fmt.Println("  worktree list             List worktrees with session associations")
-	fmt.Println("  worktree info <session>   Show worktree info for a session")
-	fmt.Println("  worktree cleanup          Find and remove orphaned worktrees/sessions")
-	fmt.Println()
-	fmt.Println("Profile Commands:")
-	fmt.Println("  profile list              List all profiles")
-	fmt.Println("  profile create <name>     Create a new profile")
-	fmt.Println("  profile delete <name>     Delete a profile")
-	fmt.Println("  profile default [name]    Show or set default profile")
-	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  agent-deck                            # Start TUI with default profile")
-	fmt.Println("  agent-deck -p work                    # Start TUI with 'work' profile")
-	fmt.Println("  agent-deck add .                      # Add current directory")
-	fmt.Println("  agent-deck add -t \"My App\" -g dev .   # With title and group")
-	fmt.Println("  agent-deck session start my-project   # Start a session")
-	fmt.Println("  agent-deck session show               # Show current session (in tmux)")
-	fmt.Println("  agent-deck mcp list --json            # List MCPs as JSON")
-	fmt.Println("  agent-deck mcp attach my-app exa      # Attach MCP to session")
-	fmt.Println("  agent-deck skill attach my-app react  # Attach skill to project")
-	fmt.Println("  agent-deck group move my-app work     # Move session to group")
-	fmt.Println("  agent-deck web                        # TUI + web server on 127.0.0.1:8420")
-	fmt.Println("  agent-deck web --listen 127.0.0.1:9000  # TUI + web on a custom loopback port")
-	fmt.Println("  agent-deck web --read-only            # TUI + web in read-only mode")
-	fmt.Println("  agent-deck web --token secret         # auth token (REQUIRED to bind a non-loopback address)")
-	fmt.Println("  agent-deck web --help                 # Show web command flags")
-	fmt.Println()
-	fmt.Println("Environment Variables:")
-	fmt.Println("  AGENTDECK_PROFILE    Default profile to use")
-	fmt.Println("  AGENTDECK_COLOR      Color mode: truecolor, 256, 16, none")
-	fmt.Println()
-	fmt.Println("Configuration:")
-	if configPath, err := session.GetUserConfigPath(); err == nil {
-		fmt.Printf("  Config file: %s\n", configPath)
-	} else {
-		fmt.Println("  Config file: $XDG_CONFIG_HOME/agent-deck/config.toml (default ~/.config/agent-deck/config.toml)")
-	}
-	fmt.Println("  Since v1.9.49 config lives under the XDG base dirs, not ~/.agent-deck.")
-	fmt.Println("  Run 'agent-deck migrate-paths' to copy legacy ~/.agent-deck files across.")
-	fmt.Println()
-	fmt.Println("Keyboard shortcuts (in TUI):")
-	fmt.Println("  n          New session")
-	fmt.Println("  g          New group")
-	fmt.Println("  Enter      Interact with session in Output")
-	fmt.Println("  Esc        Return from Output to navigation")
-	fmt.Println("  m          MCP Manager")
-	fmt.Println("  s          Skills Manager")
-	fmt.Println("  M          Move session to group")
-	fmt.Println("  r          Rename session/group")
-	fmt.Println("  R          Restart session")
-	fmt.Println("  d          Delete session/group")
-	fmt.Println("  S          Settings")
-	fmt.Println("  /          Search")
-	fmt.Println("  q          Quit")
+	fmt.Println("Global options: -p, --profile <name>; -g, --group <name>; --select <id|title>")
+	fmt.Println("See `agent-deck session --help` and the skills references for details.")
 }
 
 // mergeFlags returns the non-empty value, preferring the first

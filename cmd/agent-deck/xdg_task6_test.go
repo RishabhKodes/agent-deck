@@ -218,19 +218,6 @@ func TestXDGTask6_DebugDumpCommandWritesToXDGCache(t *testing.T) {
 	}
 }
 
-func TestXDGTask6_WatcherInstallSkillUsesConfiguredPoolPath(t *testing.T) {
-	_, xdgConfigHome, _, _ := setupTask6XDGEnv(t)
-
-	if err := handleWatcherInstallSkill("default", []string{"watcher-creator"}); err != nil {
-		t.Fatalf("handleWatcherInstallSkill: %v", err)
-	}
-
-	want := filepath.Join(xdgConfigHome, "agent-deck", "skills", "pool", "watcher-creator", "SKILL.md")
-	if _, err := os.Stat(want); err != nil {
-		t.Fatalf("watcher skill should be installed under configured pool path: %v", err)
-	}
-}
-
 func TestXDGTask6_PluginHelpAndErrorsUseEffectiveConfigPath(t *testing.T) {
 	_, xdgConfigHome, _, _ := setupTask6XDGEnv(t)
 	wantConfig := filepath.Join(xdgConfigHome, "agent-deck", "config.toml")

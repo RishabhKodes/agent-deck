@@ -2079,6 +2079,11 @@ func TestNewDialog_PathInput_AcceptsUnderscore(t *testing.T) {
 	}
 }
 
+func sendSpecialKey(d *NewDialog, key tea.KeyType) *NewDialog {
+	updated, _ := d.Update(tea.KeyMsg{Type: key})
+	return updated
+}
+
 // TestNewDialog_View_ShowsStartQueryField_WhenClaudeSelected asserts the
 // v1.7.67 "Start query" input renders in the claude-options panel when
 // the claude preset is selected. The field is the dedicated entry point

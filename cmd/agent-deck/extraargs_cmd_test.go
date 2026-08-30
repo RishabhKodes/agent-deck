@@ -31,7 +31,6 @@ func TestAddExtraArgFlag(t *testing.T) {
 		"-c", "claude",
 		"--extra-arg", "--agent",
 		"--extra-arg", "my-agent",
-		"--no-parent",
 		"--json",
 		projectDir,
 	)
@@ -69,7 +68,6 @@ func TestSessionSetExtraArgs(t *testing.T) {
 		"add",
 		"-t", "ea-set-test",
 		"-c", "claude",
-		"--no-parent",
 		"--json",
 		projectDir,
 	)
@@ -185,7 +183,7 @@ func TestExtraArgsOnlyForClaude(t *testing.T) {
 
 	// Positive control: claude session accepts extra-args.
 	stdout, stderr, code := runAgentDeck(t, home,
-		"add", "-t", "ea-claude-ok", "-c", "claude", "--no-parent", "--json", claudeProj,
+		"add", "-t", "ea-claude-ok", "-c", "claude", "--json", claudeProj,
 	)
 	if code != 0 {
 		t.Fatalf("add claude failed (exit %d)\nstdout: %s\nstderr: %s", code, stdout, stderr)
@@ -211,7 +209,7 @@ func TestExtraArgsOnlyForClaude(t *testing.T) {
 
 	// Negative control: shell session rejects extra-args with a tool-specific message.
 	stdout, stderr, code = runAgentDeck(t, home,
-		"add", "-t", "ea-shell-reject", "-c", "bash", "--no-parent", "--json", shellProj,
+		"add", "-t", "ea-shell-reject", "-c", "bash", "--json", shellProj,
 	)
 	if code != 0 {
 		t.Fatalf("add shell failed (exit %d)\nstdout: %s\nstderr: %s", code, stdout, stderr)

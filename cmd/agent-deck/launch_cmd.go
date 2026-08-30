@@ -13,24 +13,6 @@ import (
 	"github.com/RishabhKodes/agent-deck/internal/vcs"
 )
 
-// assertDoneInstruction is appended to a child's initial message so it ends its
-// final turn with the #1186 completion sentinel. The completion ledger and the
-// parent inbox both key off this line; without it "done" is never trustworthy.
-const assertDoneInstruction = "\n\n## Final step — assert completion\n" +
-	"When the task is fully done, print exactly this as the last line of your final message:\n" +
-	"  ===AGENTDECK_DONE=== status=ok summary=<what you accomplished, one line>\n" +
-	"Use status=fail if you could not complete it; put the blocker in the summary."
-
-// applyAssertDone appends the completion-sentinel instruction when enabled and
-// there is an initial message to attach it to. A no-op for an empty message
-// (nothing to append to) or when disabled.
-func applyAssertDone(message string, enabled bool) string {
-	if !enabled || strings.TrimSpace(message) == "" {
-		return message
-	}
-	return message + assertDoneInstruction
-}
-
 // handleLaunch combines add + start + optional send into a single command.
 // It creates a new session, starts it, and optionally sends an initial message.
 func handleLaunch(profile string, args []string) {
@@ -46,28 +28,11 @@ func handleLaunch(profile string, args []string) {
 	messageShort := fs.String("m", "", "Initial message to send (short)")
 	messageFile := fs.String("message-file", "", "Read the initial message from a file ('-' for stdin); avoids shell quoting of long prompts")
 	noWait := fs.Bool("no-wait", false, "Don't wait for agent to be ready before sending message")
-	assertDone := fs.Bool("assert-done", false, "Append a completion-sentinel instruction to the message (default on for -c claude)")
-	noAssertDone := fs.Bool("no-assert-done", false, "Disable the completion-sentinel instruction")
-	parent := fs.String("parent", "", "Parent session (creates sub-session; group is cwd-derived by default — auto-inherits the parent's group for git worktree children or with --inherit-group)")
-	parentShort := fs.String("p", "", "Parent session (short)")
-	noParent := fs.Bool("no-parent", false, "Disable automatic parent linking")
-	// Keep a fanned-out child in the parent's group instead of the cwd-derived
-	// group. Without this, a child launched into a worktree (.worktrees/<branch>)
-	// derives its group from that leaf folder and lands in a per-branch group
-	// detached from the parent. Opt-in so #972 (conductor children -> project
-	// group) is preserved by default. Used by the fleet skill.
-	inheritGroup := fs.Bool("inherit-group", false, "Place the child in the parent session's group instead of the cwd-derived group (auto-applied for git worktree children; use this to force it for non-worktree paths)")
-	noTransitionNotify := fs.Bool("no-transition-notify", false, "Suppress transition event notifications to parent session")
 	// #697: conductor-friendly title lock. Prevents Claude's session name
 	// from overwriting the agent-deck title. An explicit -t/--title already
 	// locks (#1715); these flags also lock an auto-named session.
 	titleLock := fs.Bool("title-lock", false, "Lock session title so Claude's session name never overrides it; implied by an explicit -t/--title (#697)")
 	noTitleSync := fs.Bool("no-title-sync", false, "Alias for --title-lock")
-	// #1133: opt-in to inherit the conductor's TELEGRAM_* env vars in the
-	// child. Off by default — a child inheriting TELEGRAM_STATE_DIR /
-	// TELEGRAM_BOT_TOKEN spawns a duplicate `bun telegram` poller that
-	// races the conductor for the bot lock (Telegram 409, dropped messages).
-	inheritTelegramEnv := fs.Bool("inherit-telegram-env", false, "Keep TELEGRAM_* env vars in the child (#1133); off by default to prevent duplicate plugin pollers")
 	jsonOutput := fs.Bool("json", false, "Output as JSON")
 	quiet := fs.Bool("quiet", false, "Minimal output")
 	quietShort := fs.Bool("q", false, "Minimal output (short)")
@@ -151,12 +116,10 @@ func handleLaunch(profile string, args []string) {
 		fmt.Println("  agent-deck launch . -c claude -m \"Explain this codebase\"")
 		fmt.Println("  agent-deck launch /path/to/project -t \"My Agent\" -c claude -g work")
 		fmt.Println("  agent-deck launch . -c claude --mcp memory -m \"Research topic X\"")
-		fmt.Println("  agent-deck launch . -c claude --channel plugin:telegram@user/repo -m \"Listen for messages\"")
+		fmt.Println("  agent-deck launch . -c claude --channel plugin:events@user/repo -m \"Listen for messages\"")
 		fmt.Println("  agent-deck launch . -c claude -m \"Fix bug\" --no-wait")
 		fmt.Println("  agent-deck launch . -c claude --message-file task.md   # long prompt from file, no shell quoting")
-		fmt.Println("  agent-deck launch . -c claude -m \"Refactor X\"   # auto-appends completion sentinel (see session children)")
 		fmt.Println("  agent-deck launch . -c \"codex --dangerously-bypass-approvals-and-sandbox\"")
-		fmt.Println("  agent-deck launch . -g ard --no-parent -c claude -m \"Run review\"")
 		fmt.Println("  agent-deck launch . -c claude -w feature/new -b -m \"Start work\"")
 	}
 
@@ -201,16 +164,10 @@ func handleLaunch(profile string, args []string) {
 	// Merge flags
 	sessionTitle := mergeFlags(*title, *titleShort)
 	sessionGroup := mergeFlags(*group, *groupShort)
-	explicitGroupProvided := strings.TrimSpace(sessionGroup) != ""
 	sessionCommandInput := mergeFlags(*command, *commandShort)
 	sessionCommandTool, sessionCommandResolved, sessionWrapperResolved, sessionCommandNote, sessionCommandIsPassthrough, cmdErr := resolveSessionCommand(sessionCommandInput, *wrapper)
 	if cmdErr != nil {
 		out.Error(cmdErr.Error(), ErrCodeInvalidOperation)
-		os.Exit(1)
-	}
-	sessionParent := mergeFlags(*parent, *parentShort)
-	if sessionParent != "" && *noParent {
-		out.Error("--parent and --no-parent cannot be used together", ErrCodeInvalidOperation)
 		os.Exit(1)
 	}
 	initialMessage, err := resolveMessageInput(mergeFlags(*message, *messageShort), *messageFile, os.Stdin)
@@ -218,20 +175,6 @@ func handleLaunch(profile string, args []string) {
 		out.Error(err.Error(), ErrCodeInvalidOperation)
 		os.Exit(1)
 	}
-
-	// --assert-done: append the completion-sentinel instruction so the child
-	// reliably reports back via the ledger / parent inbox. Default-on for
-	// Claude children (a completion signal nobody requests is useless);
-	// --no-assert-done always wins.
-	assertDoneTool := firstNonEmpty(sessionCommandTool, detectTool(sessionCommandInput))
-	assertDoneOn := *assertDone
-	if !*assertDone && !*noAssertDone && session.IsClaudeCompatible(assertDoneTool) {
-		assertDoneOn = true
-	}
-	if *noAssertDone {
-		assertDoneOn = false
-	}
-	initialMessage = applyAssertDone(initialMessage, assertDoneOn)
 
 	// Resolve worktree flags
 	wtBranch := *worktreeBranch
@@ -339,50 +282,6 @@ func handleLaunch(profile string, args []string) {
 		os.Exit(1)
 	}
 
-	// Resolve parent session if specified.
-	// Issue #972: when no explicit -g is passed, prefer the cwd-derived
-	// project group over the parent's group, so conductor-spawned children
-	// land in the project group (e.g. `agent-deck`) instead of the
-	// conductor's own group (`conductor`). The parent group is now a
-	// fallback for path mappings that produce no group.
-	cwdDerivedGroup := session.GroupPathForProject(path)
-	// A worktree child auto-inherits its parent's group (issue: fleets fanned
-	// into worktrees scattered into junk per-branch / `worktrees` groups, or
-	// a deliberately-named group, detached from the parent). `path` is already
-	// the final worktree path here (the -w branch above reassigns it before
-	// this point). git.IsLinkedWorktree returns false for main working trees,
-	// so #972's conductor children (separate real repos) keep cwd-derived group.
-	// The thunk defers the git probe until shouldInheritParentGroup needs it.
-	inheritParentGroup := shouldInheritParentGroup(explicitGroupProvided, *inheritGroup, func() bool {
-		return git.IsLinkedWorktree(path)
-	})
-	var parentInstance *session.Instance
-	if sessionParent != "" {
-		var errMsg string
-		parentInstance, errMsg, _ = ResolveSession(sessionParent, instances)
-		if parentInstance == nil {
-			out.Error(errMsg, ErrCodeNotFound)
-			os.Exit(1)
-		}
-		if parentInstance.IsSubSession() {
-			out.Error("cannot create sub-session of a sub-session (single level only)", ErrCodeInvalidOperation)
-			os.Exit(1)
-		}
-		sessionGroup = resolveGroupSelection(sessionGroup, cwdDerivedGroup, parentInstance.GroupPath, explicitGroupProvided, inheritParentGroup)
-	} else if !*noParent {
-		var unresolvedParent string
-		parentInstance, unresolvedParent = resolveAutoParentInstanceChecked(instances)
-		if parentInstance == nil && unresolvedParent != "" {
-			out.Error(fmt.Sprintf("automatic parent %q could not be resolved; use --parent with a valid session or --no-parent for an intentional top-level session", unresolvedParent), ErrCodeNotFound)
-			os.Exit(1)
-		}
-		if parentInstance != nil && !parentInstance.IsSubSession() {
-			sessionGroup = resolveGroupSelection(sessionGroup, cwdDerivedGroup, parentInstance.GroupPath, explicitGroupProvided, inheritParentGroup)
-		} else {
-			parentInstance = nil
-		}
-	}
-
 	// Default title to folder name
 	if sessionTitle == "" {
 		sessionTitle = filepath.Base(path)
@@ -453,14 +352,6 @@ func handleLaunch(profile string, args []string) {
 		newInstance.Account = trimmed
 	}
 
-	if parentInstance != nil {
-		newInstance.SetParentWithPath(parentInstance.ID, parentInstance.ProjectPath)
-	}
-
-	if *noTransitionNotify {
-		newInstance.NoTransitionNotify = true
-	}
-
 	// #697/#1715: title-lock blocks Claude's session-name sync. An explicit
 	// -t/--title is deliberate human or orchestrator intent, so it locks by
 	// default here too — otherwise Claude's session-name sync renames the
@@ -471,11 +362,6 @@ func handleLaunch(profile string, args []string) {
 	// opt-outs for auto-named sessions.
 	if shouldLockTitle(userProvidedTitle, *titleLock, *noTitleSync) {
 		newInstance.TitleLocked = true
-	}
-
-	// #1133: explicit opt-in for inheriting the conductor's telegram env.
-	if *inheritTelegramEnv {
-		newInstance.InheritTelegramEnv = true
 	}
 
 	if sessionCommandInput != "" {
@@ -640,15 +526,6 @@ func handleLaunch(profile string, args []string) {
 		return
 	}
 
-	// Issue #955: strip TELEGRAM_STATE_DIR from the agent-deck CLI
-	// process env before the tmux server inherits it on the first
-	// `new-session`. No-op for conductors and explicit telegram
-	// channel owners — they legitimately own the bot token. Sits
-	// above the S8 exec-layer (env -u TELEGRAM_STATE_DIR claude …)
-	// so even non-claude descendants of the pane (Bash-tool spawns,
-	// fork claudes, restart respawn) start with a clean env.
-	session.ScrubProcessEnvForChildLaunch(newInstance)
-
 	// Start the session.
 	// - default: StartWithMessage waits for readiness and delivers initial prompt
 	// - --no-wait: start immediately, then fire-and-forget send below
@@ -783,9 +660,6 @@ func handleLaunch(profile string, args []string) {
 	}
 	if len(mcpFlags) > 0 {
 		jsonData["mcps"] = mcpFlags
-	}
-	if parentInstance != nil {
-		jsonData["parent_id"] = parentInstance.ID
 	}
 	if worktreePath != "" {
 		jsonData["worktree_path"] = worktreePath

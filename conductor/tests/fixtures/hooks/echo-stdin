@@ -1,3 +1,0 @@
-#!/bin/sh
-# Hook that reads stdin JSON and echoes it back (for verifying context is passed)
-cat

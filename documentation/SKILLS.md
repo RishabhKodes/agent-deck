@@ -118,8 +118,7 @@ Common structure:
 
 The repo ships a small set of skills inside `skills/`:
 
-- `skills/agent-deck/SKILL.md`: the canonical orchestration skill. Covers session lifecycle, MCP attach/detach, groups, profiles, worktree sessions, and sub-agent launching. Every installation gets a curl-one-liner in the README that drops it straight into `~/.claude/skills/agent-deck/`.
-- `skills/watcher-creator/`: guides the creation of watcher processes under the watcher framework.
+- `skills/agent-deck/SKILL.md`: the canonical local session skill. Covers session lifecycle, MCP attach/detach, groups, profiles, and worktree sessions.
 - `skills/session-share/`: helpers for exporting and importing sessions between developers.
 
 These are shipped as reference implementations: you can read them to understand how a well-shaped skill is written.
@@ -150,5 +149,4 @@ A skill can start in the pool, prove itself useful, and get promoted to user-lev
 
 ## Related docs
 
-- [CONDUCTOR.md](CONDUCTOR.md): conductors lean heavily on skills for policy and routines.
-- [WATCHDOG.md](WATCHDOG.md): the watchdog itself has no skill, but conductors it restarts typically do.
+- [../README.md](../README.md): installation and local usage.

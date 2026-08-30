@@ -46,21 +46,17 @@ type insertPreviewRefreshMsg struct{}
 // are forwarded directly to that session's tmux pane via send-keys, instead of
 // being interpreted as TUI commands. Esc returns to normal mode.
 
-// enterInsertMode arms insert mode if the cursor is on a session whose tmux
-// pane exists (local) or a remote session row. Returns true on success.
+// enterInsertMode arms insert mode if the cursor is on a local session whose
+// tmux pane exists. Returns true on success.
 // Errors are surfaced via setError so the user sees why nothing happened.
-//
-// #1102 changes: also accepts ItemTypeRemoteSession rows. The local path
-// still requires a live tmux pane; the remote path doesn't (the pane lives
-// on the remote agent-deck and is reached by the SSH-backed KeySender).
 func (h *Home) enterInsertMode() bool {
 	target, ok := h.selectedInsertTarget()
 	if !ok {
 		return false
 	}
 
-	// Open the persistent KeySender FIRST so a bring-up failure (no tmux,
-	// no remote, dead session) keeps the TUI in normal mode. If we flipped
+	// Open the persistent KeySender FIRST so a bring-up failure keeps the TUI
+	// in normal mode. If we flipped
 	// insertMode=true first and then failed, the user would be stranded.
 	ks, err := h.openInsertKeySender(target)
 	if err != nil && !errors.Is(err, errInsertNoTmuxSession) {
@@ -70,12 +66,7 @@ func (h *Home) enterInsertMode() bool {
 		// SendKeys (legacy path) so the feature stays usable on
 		// environments where the persistent client can't open
 		// (e.g., container without `tmux -C` support).
-		if !errors.Is(err, errInsertNoRemoteConfig) {
-			h.insertKeySender = nil
-		} else {
-			h.setError(fmt.Errorf("output interaction: %w", err))
-			return false
-		}
+		h.insertKeySender = nil
 	} else if err == nil {
 		h.insertKeySender = ks
 	} else {
@@ -94,15 +85,7 @@ func (h *Home) enterInsertMode() bool {
 	h.resetPreviewScroll()
 
 	h.insertMode = true
-	if target.isRemote() {
-		h.insertModeSessionID = ""
-		h.insertModeRemoteName = target.remoteName
-		h.insertModeRemoteID = target.remoteID
-	} else {
-		h.insertModeSessionID = target.local.ID
-		h.insertModeRemoteName = ""
-		h.insertModeRemoteID = ""
-	}
+	h.insertModeSessionID = target.local.ID
 	return true
 }
 
@@ -133,15 +116,6 @@ func (h *Home) selectedInsertTarget() (insertTargetRef, bool) {
 			return insertTargetRef{}, false
 		}
 		return insertTargetRef{local: inst, windowIndex: item.WindowIndex, hasWindow: true}, true
-	case session.ItemTypeRemoteSession:
-		if item.RemoteSession == nil || item.RemoteName == "" {
-			h.setError(fmt.Errorf("output interaction: remote session row is malformed"))
-			return insertTargetRef{}, false
-		}
-		return insertTargetRef{
-			remoteName: item.RemoteName,
-			remoteID:   item.RemoteSession.ID,
-		}, true
 	default:
 		h.setError(fmt.Errorf("output interaction: select a session first"))
 		return insertTargetRef{}, false
@@ -166,8 +140,6 @@ func (h *Home) openInsertKeySender(target insertTargetRef) (insertKeySender, err
 func (h *Home) exitInsertMode() {
 	h.insertMode = false
 	h.insertModeSessionID = ""
-	h.insertModeRemoteName = ""
-	h.insertModeRemoteID = ""
 	h.insertBuf.Reset()
 	h.insertFlushPending = false
 	h.resetPreviewScroll()
@@ -410,20 +382,11 @@ func (h *Home) dispatchInsertNamedKey(key string) {
 }
 
 // resolveInsertTarget returns the local Instance for insert mode, or nil if
-// the target is remote or has disappeared. Remote sessions never have an
-// Instance — callers that need them (test sinks, legacy fork+exec fallback)
-// will see nil here and bail; the dispatchInsert* functions already route
-// remote sessions through h.insertKeySender before reaching this fallback.
+// the target has disappeared.
 func (h *Home) resolveInsertTarget() *session.Instance {
 	if h.insertModeSessionID == "" {
-		// Remote sessions are valid insert-mode targets but have no local
-		// Instance. The non-sink dispatch path uses insertKeySender for
-		// them; only test sinks call this resolver, and they're set up by
-		// local-session tests.
-		if h.insertModeRemoteID == "" {
-			h.exitInsertMode()
-			h.setError(fmt.Errorf("insert mode: no target session"))
-		}
+		h.exitInsertMode()
+		h.setError(fmt.Errorf("insert mode: no target session"))
 		return nil
 	}
 	inst := h.getInstanceByID(h.insertModeSessionID)
@@ -469,21 +432,9 @@ func (h *Home) renderInsertModeBar() string {
 	return lipgloss.JoinVertical(lipgloss.Left, border, line)
 }
 
-// insertTargetDisplayName returns the title (or remote-qualified label) for
-// the insert-mode target, so the bottom-bar indicator names something the
-// user recognises even when typing into a remote session.
+// insertTargetDisplayName returns the local session title for the insert-mode
+// target.
 func (h *Home) insertTargetDisplayName() string {
-	if h.insertModeRemoteName != "" {
-		// Look up the remote session row for its title.
-		h.remoteSessionsMu.RLock()
-		defer h.remoteSessionsMu.RUnlock()
-		for _, s := range h.remoteSessions[h.insertModeRemoteName] {
-			if s.ID == h.insertModeRemoteID {
-				return h.insertModeRemoteName + "/" + s.Title
-			}
-		}
-		return h.insertModeRemoteName + "/" + h.insertModeRemoteID
-	}
 	if inst := h.getInstanceByID(h.insertModeSessionID); inst != nil {
 		return inst.Title
 	}

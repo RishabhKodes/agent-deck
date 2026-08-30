@@ -12,7 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/RishabhKodes/agent-deck/internal/session"
-	"github.com/RishabhKodes/agent-deck/internal/update"
 )
 
 func TestNewHome(t *testing.T) {
@@ -1741,8 +1740,6 @@ func TestRenderRemotePreviewTruncatesCachedResponseLines(t *testing.T) {
 		Path:   "/srv/project",
 	}
 	item := session.Item{Type: session.ItemTypeRemoteSession, RemoteSession: &remote, RemoteName: "myserver"}
-	home.flatItems = []session.Item{item}
-	home.cursor = 0
 
 	lines := make([]string, 250)
 	for i := range lines {
@@ -1754,14 +1751,8 @@ func TestRenderRemotePreviewTruncatesCachedResponseLines(t *testing.T) {
 	if strings.Contains(rendered, "line-049") {
 		t.Fatalf("rendered preview should drop lines outside the retained tail, got: %q", rendered)
 	}
-	if strings.Contains(rendered, "line-050") || !strings.Contains(rendered, "line-249") {
-		t.Fatalf("live remote preview should show the visible tail, got: %q", rendered)
-	}
-
-	home.scrollPreviewToOldest()
-	rendered = home.renderRemotePreview(item, 80, 20)
-	if !strings.Contains(rendered, "line-050") || strings.Contains(rendered, "line-049") {
-		t.Fatalf("oldest remote viewport should begin at the retained 200-line boundary, got: %q", rendered)
+	if !strings.Contains(rendered, "line-050") || !strings.Contains(rendered, "line-249") {
+		t.Fatalf("rendered preview should retain the last 200 lines, got: %q", rendered)
 	}
 }
 
@@ -1780,7 +1771,7 @@ func TestRenderRemotePreviewTruncatesCachedResponseBytes(t *testing.T) {
 
 	prefix := "TRUNCATE-ME"
 	tail := "KEEP-TAIL"
-	content := prefix + strings.Repeat("x", 20*1024) + "\n" + tail
+	content := prefix + strings.Repeat("x", 20*1024) + tail
 	home.previewCache[remotePreviewCacheKey("myserver", "remote-123")] = content
 
 	rendered := home.renderRemotePreview(item, 80, 20)
@@ -2688,11 +2679,11 @@ func TestMouseYToItemIndex(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		y          int
-		viewOffset int
-		wantIndex  int
-		banners    bool // enable update + maintenance banners
+		name        string
+		y           int
+		viewOffset  int
+		wantIndex   int
+		maintenance bool
 	}{
 		{"click on first item", 4, 0, 0, false},
 		{"click on second item", 5, 0, 1, false},
@@ -2709,14 +2700,7 @@ func TestMouseYToItemIndex(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			home := newTestHomeWithItems(100, 30, items)
 			home.viewOffset = tc.viewOffset
-			if tc.banners {
-				// v1.7.59: the update banner now renders via ShouldNudge,
-				// which requires ReleasesBehind > NudgeThreshold. Any
-				// value >5 flips the same banner path this test measured.
-				home.updateInfo = &update.UpdateInfo{
-					Available: true, CurrentVersion: "1.0", LatestVersion: "2.0",
-					ReleasesBehind: 30,
-				}
+			if tc.maintenance {
 				home.maintenanceMsg = "test maintenance"
 			}
 

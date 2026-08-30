@@ -294,25 +294,3 @@ func TestReconcileClaimsOrphanSweepSeparateFromOwned(t *testing.T) {
 		t.Error("owned session must remain owned across sweeps")
 	}
 }
-
-func TestReconcileClaimsHeadlessSkipsOrphanSweep(t *testing.T) {
-	newClaimsTestDB(t)
-
-	h := &Home{claimPolling: true, groupScope: "scope-a", headless: true}
-	instances := []*session.Instance{
-		{ID: "owned-1", GroupPath: "scope-a"},
-		{ID: "orphan-1", GroupPath: "scope-b"},
-	}
-
-	h.reconcileClaims(instances)
-
-	if !h.isOwned("owned-1") {
-		t.Error("in-scope session must still be owned in headless mode")
-	}
-	if h.orphanPolled != nil {
-		t.Errorf("headless instance must never elect primary / orphan-poll, got %v", h.orphanPolled)
-	}
-	if h.isPolledByMe("orphan-1") {
-		t.Error("headless instance must not poll orphans")
-	}
-}

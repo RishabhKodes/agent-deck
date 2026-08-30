@@ -1,3 +1,0 @@
-#!/bin/sh
-# This hook intentionally has no execute permission
-echo "should not run"

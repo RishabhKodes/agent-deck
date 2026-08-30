@@ -233,8 +233,8 @@ func TestReorderArgsForFlagParsing_CmdAndGroup(t *testing.T) {
 		},
 		{
 			name:     "mixed flags with --no-parent",
-			args:     []string{"-g", "mygroup", "-c", "claude", "--no-parent", "."},
-			expected: []string{"-g", "mygroup", "-c", "claude", "--no-parent", "."},
+			args:     []string{"-g", "mygroup", "-c", "claude", "."},
+			expected: []string{"-g", "mygroup", "-c", "claude", "."},
 		},
 		{
 			name:     "equals syntax for -c flag",

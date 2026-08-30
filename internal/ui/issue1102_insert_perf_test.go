@@ -203,13 +203,6 @@ func TestIssue1102_LegacyFallbackUsedWhenSenderUnavailable(t *testing.T) {
 	// dispatch alive via insertKeySink (the test's per-call sink), proving
 	// no degradation in functionality.
 	home.insertOpenKeySender = func(insertTargetRef) (insertKeySender, error) {
-		return nil, errInsertNoRemoteConfig
-	}
-	// Reset opener so enterInsertMode error path fires — but in this case
-	// errInsertNoRemoteConfig is a local-session bring-up failure, not a
-	// remote one. Let's instead simulate "tmux not supported": return a
-	// non-sentinel error to take the silent fallback branch.
-	home.insertOpenKeySender = func(insertTargetRef) (insertKeySender, error) {
 		// Returning errInsertNoTmuxSession would set error; returning a
 		// generic error takes the fallback branch silently.
 		return nil, &fakeOpenerErr{}

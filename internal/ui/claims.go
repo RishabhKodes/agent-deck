@@ -185,16 +185,6 @@ func (h *Home) reconcileClaims(instances []*session.Instance) {
 		return
 	}
 
-	// Headless web daemons never hold primary: the startup gate in
-	// cmd/agent-deck/main.go excludes webHeadless precisely so a headless
-	// instance can't block a subsequent TUI start under allow_multiple=false.
-	// reconcileClaims runs in headless mode too (via the status worker), so
-	// mirror that exception here rather than letting it capture primary.
-	if h.headless {
-		h.resetOrphanPolled()
-		return
-	}
-
 	isPrimary, err := db.ElectPrimary(30 * time.Second)
 	if err != nil {
 		// Transient error: don't advance lastOrphanSweep, retry next sweep

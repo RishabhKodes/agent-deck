@@ -112,11 +112,6 @@ func handleSessionRemove(profile string, args []string) {
 		os.Exit(1)
 	}
 
-	// Best-effort transition-notifier cleanup for issue #910 — see the
-	// matching block in handleRemove for rationale.
-	_, _ = session.SweepInboxesForChildSession(inst.ID)
-	_, _ = session.RemoveNotifyStateRecord(inst.ID)
-
 	out.Success(fmt.Sprintf("Removed session: %s", inst.Title), map[string]interface{}{
 		"success": true,
 		"id":      inst.ID,
@@ -236,9 +231,6 @@ func bulkRemoveSessions(
 		if exists, _ := storage.InstanceExists(id); exists {
 			_ = storage.DeleteInstance(id)
 		}
-		// Best-effort transition-notifier cleanup (issue #910).
-		_, _ = session.SweepInboxesForChildSession(id)
-		_, _ = session.RemoveNotifyStateRecord(id)
 	}
 	return removed
 }

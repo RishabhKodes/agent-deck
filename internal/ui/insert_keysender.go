@@ -1,10 +1,6 @@
 package ui
 
-import (
-	"context"
-
-	"github.com/RishabhKodes/agent-deck/internal/session"
-)
+import "github.com/RishabhKodes/agent-deck/internal/session"
 
 // insertKeySender is the local interface the insert-mode dispatch path uses
 // to forward keystrokes. It abstracts the local (tmux control-mode client)
@@ -31,14 +27,7 @@ type insertTargetRef struct {
 	// sender opens. hasWindow distinguishes window 0 from a session row.
 	windowIndex int
 	hasWindow   bool
-	// Remote target name (the SSH remote alias, e.g. "windows"). Empty for
-	// local sessions. When non-empty, remoteID must also be set.
-	remoteName string
-	remoteID   string
 }
-
-// isRemote reports whether the target is a remote session.
-func (r insertTargetRef) isRemote() bool { return r.remoteName != "" }
 
 // defaultInsertOpenKeySender is the production opener wired up by NewHome.
 // It selects the local or remote path based on the target, and falls back to
@@ -48,9 +37,6 @@ func (r insertTargetRef) isRemote() bool { return r.remoteName != "" }
 // remote KeySender backends. Adding a new backend (e.g. Docker-sandboxed) is
 // a one-liner here, not a scatter-shot across insert_mode.go.
 func defaultInsertOpenKeySender(target insertTargetRef) (insertKeySender, error) {
-	if target.isRemote() {
-		return openRemoteInsertKeySender(target.remoteName, target.remoteID)
-	}
 	if target.local == nil {
 		return nil, errInsertNoTarget
 	}
@@ -68,34 +54,4 @@ func defaultInsertOpenKeySender(target insertTargetRef) (insertKeySender, error)
 		return nil, err
 	}
 	return ks, nil
-}
-
-// openRemoteInsertKeySender resolves the remote configuration and returns a
-// RemoteKeySender bound to (remoteName, sessionID). Separated out so the
-// configuration-load + runner construction is unit-testable without
-// touching the UI.
-//
-// #1112 bug 2: prefers the streaming RemoteKeySender (one persistent
-// `ssh ... agent-deck session send-keys --stream` subprocess for the
-// entire insert-mode session) over the per-call variant. If the stream
-// fails to open (older remote agent-deck without --stream support, ssh
-// transient error), falls back to the per-call sender so the feature
-// still works — just slower.
-func openRemoteInsertKeySender(remoteName, sessionID string) (insertKeySender, error) {
-	config, err := session.LoadUserConfig()
-	if err != nil {
-		return nil, err
-	}
-	if config == nil {
-		return nil, errInsertNoRemoteConfig
-	}
-	rc, ok := config.Remotes[remoteName]
-	if !ok {
-		return nil, errInsertNoRemoteConfig
-	}
-	runner := session.NewSSHRunner(remoteName, rc)
-	if streamer, err := session.OpenStreamingRemoteKeySender(runner, sessionID, context.Background()); err == nil {
-		return streamer, nil
-	}
-	return session.NewRemoteKeySender(runner, sessionID, context.Background()), nil
 }

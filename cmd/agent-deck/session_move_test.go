@@ -21,7 +21,6 @@ func sessionMoveAddSession(t *testing.T, home, oldPath, title string) string {
 		"add",
 		"-t", title,
 		"-c", "claude",
-		"--no-parent",
 		"--json",
 		oldPath,
 	)

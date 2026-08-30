@@ -23,7 +23,6 @@ func addTestSession(t *testing.T, home, workPath, title string) string {
 		"add",
 		"-t", title,
 		"-c", "claude",
-		"--no-parent",
 		"--json",
 		workPath,
 	)

@@ -75,7 +75,6 @@ func TestSessionSetColor_PersistsValidAndRejectsInvalid(t *testing.T) {
 		"add",
 		"-t", "color-test",
 		"-c", "claude",
-		"--no-parent",
 		"--json",
 		projectDir,
 	)

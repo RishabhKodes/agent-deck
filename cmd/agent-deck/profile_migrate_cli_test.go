@@ -36,7 +36,6 @@ func addInProfile(t *testing.T, home, profile, title, path string) string {
 	stdout, stderr, code := runAgentDeck(t, home,
 		"-p", profile, "add",
 		"-t", title,
-		"--no-parent",
 		"--json",
 		path,
 	)

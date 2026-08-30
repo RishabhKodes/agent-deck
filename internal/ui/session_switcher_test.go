@@ -385,7 +385,6 @@ func TestSessionSwitcher_RemoteSessionsUnsupported(t *testing.T) {
 func TestCtrlS_NewDialogOpen_DoesNotOpenSwitcher(t *testing.T) {
 	h := &Home{
 		setupWizard:     NewSetupWizard(),
-		watcherPanel:    NewWatcherPanel(),
 		settingsPanel:   NewSettingsPanel(),
 		helpOverlay:     NewHelpOverlay(),
 		search:          NewSearch(),

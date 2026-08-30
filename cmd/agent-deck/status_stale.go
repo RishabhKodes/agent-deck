@@ -229,6 +229,7 @@ func runStatusStale(profile string, threshold time.Duration, jsonOutput bool) {
 		fmt.Printf("Error: failed to load sessions: %v\n", err)
 		os.Exit(1)
 	}
+	instances = localInstancesOnly(instances)
 
 	// Refresh status the same way `status`/`status -v` does (issue #610 parity)
 	// so staleness is judged against live state, not a stale on-disk snapshot.

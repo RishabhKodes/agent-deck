@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,17 +61,6 @@ func handleSession(profile string, args []string) {
 		handleSessionShow(profile, args[1:])
 	case "current":
 		handleSessionCurrent(profile, args[1:])
-	case "set-parent":
-		handleSessionSetParent(profile, args[1:])
-	case "unset-parent":
-		handleSessionUnsetParent(profile, args[1:])
-	case "update":
-		// Issue #974: users expect `session update <id> --no-parent` and
-		// `session update <id> --parent <p>` to mirror typical CRUD verbs.
-		// Route to the existing canonical handlers.
-		handleSessionUpdate(profile, args[1:])
-	case "set-transition-notify":
-		handleSessionSetTransitionNotify(profile, args[1:])
 	case "set-title-lock":
 		handleSessionSetTitleLock(profile, args[1:])
 	case "set":
@@ -89,8 +77,6 @@ func handleSession(profile string, args []string) {
 		handleSessionSendKeys(profile, args[1:])
 	case "output":
 		handleSessionOutput(profile, args[1:])
-	case "children":
-		handleSessionChildren(profile, args[1:])
 	case "search":
 		handleSessionSearch(profile, args[1:])
 	case "help", "--help", "-h":
@@ -129,13 +115,7 @@ func printSessionHelp() {
 	fmt.Println("  send <id> <message>     Send a message to a running session")
 	fmt.Println("  approve <id> [choice]   Resolve a visible Codex approval prompt")
 	fmt.Println("  output <id>             Get the last response from a session")
-	fmt.Println("  children [id]           List sub-sessions with status + last completion")
 	fmt.Println("  search <query>          Search message content across Claude sessions")
-	fmt.Println("  set-parent <id> <parent>  Link session as sub-session of parent")
-	fmt.Println("  unset-parent <id>       Remove sub-session link")
-	fmt.Println("  update <id> --no-parent          Alias for unset-parent <id>")
-	fmt.Println("  update <id> --parent <pid>       Alias for set-parent <id> <pid>")
-	fmt.Println("  set-transition-notify <id> <on|off>  Enable/disable transition notifications")
 	fmt.Println("  set-title-lock <id> <on|off>         Lock/unlock title from Claude session-name sync (#697)")
 	fmt.Println()
 	fmt.Println("Global Options:")
@@ -152,10 +132,6 @@ func printSessionHelp() {
 	fmt.Println("  agent-deck session attach my-project")
 	fmt.Println("  agent-deck session show                  # Auto-detect current session")
 	fmt.Println("  agent-deck session show my-project --json")
-	fmt.Println("  agent-deck session set-parent sub-task main-project  # Make sub-task a sub-session")
-	fmt.Println("  agent-deck session unset-parent sub-task             # Remove sub-session link")
-	fmt.Println("  agent-deck session set-transition-notify worker off    # Suppress notifications")
-	fmt.Println("  agent-deck session set-transition-notify worker on     # Re-enable notifications")
 	fmt.Println("  agent-deck session set-title-lock SCRUM-351 on         # Prevent Claude from renaming it")
 	fmt.Println("  agent-deck session set-title-lock SCRUM-351 off        # Re-enable title sync")
 	fmt.Println("  agent-deck session output my-project                 # Get last response from session")
@@ -2040,23 +2016,6 @@ func handleSessionSet(profile string, args []string) {
 		"new_value": value,
 	})
 
-	maybeEmitSessionSetTelegramWarnings(os.Stderr, session.GetClaudeConfigDirForGroup(inst.GroupPath), inst, field)
-}
-
-// maybeEmitSessionSetTelegramWarnings is the post-mutation telegram-topology
-// hook for `agent-deck session set` (v1.7.22 / #658). Gated to wrapper and
-// channels — other fields are silent. claudeCfgDir lets tests inject a temp
-// dir without touching the real ~/.claude lookup.
-func maybeEmitSessionSetTelegramWarnings(out io.Writer, claudeCfgDir string, inst *session.Instance, field string) {
-	if field != "wrapper" && field != "channels" {
-		return
-	}
-	globalTelegramEnabled, _ := readTelegramGloballyEnabled(claudeCfgDir)
-	emitTelegramWarnings(out, session.TelegramValidatorInput{
-		GlobalEnabled:   globalTelegramEnabled,
-		SessionChannels: inst.Channels,
-		SessionWrapper:  inst.Wrapper,
-	})
 }
 
 // loadSessionData loads storage and session data for a profile
@@ -2799,17 +2758,6 @@ func handleSessionSend(profile string, args []string) {
 		os.Exit(1)
 	}
 
-	if shouldSkipConductorHeartbeatSend(inst, message) {
-		out.Success(fmt.Sprintf("Skipped heartbeat for '%s'", inst.Title), map[string]interface{}{
-			"success":       true,
-			"skipped":       true,
-			"session_id":    inst.ID,
-			"session_title": inst.Title,
-			"message":       message,
-		})
-		return
-	}
-
 	// Get tmux session
 	tmuxSess := inst.GetTmuxSession()
 	if tmuxSess == nil {
@@ -3020,32 +2968,6 @@ func defaultSendOptions() sendRetryOptions {
 		checkDelay:     300 * time.Millisecond,
 		verifyDelivery: true,
 	}
-}
-
-func shouldSkipConductorHeartbeatSend(inst *session.Instance, message string) bool {
-	if inst == nil || !session.IsConductorHeartbeatMessage(message) {
-		return false
-	}
-	name := strings.TrimPrefix(inst.Title, session.ConductorSessionTitlePrefix)
-	if name == inst.Title || name == "" {
-		return false
-	}
-	meta, err := session.LoadConductorMeta(name)
-	if err != nil {
-		return false
-	}
-	idleMinutes := meta.GetHeartbeatIdleMinutes()
-	if idleMinutes <= 0 {
-		return false
-	}
-	lastActivity, err := session.GetConductorLastActivity(name, meta.Profile)
-	if err != nil {
-		return false
-	}
-	if lastActivity.IsZero() {
-		return false
-	}
-	return time.Since(lastActivity) >= time.Duration(idleMinutes)*time.Minute
 }
 
 // Delivery status values surfaced by the `session send` path (issue #1413).
@@ -4695,102 +4617,6 @@ func childrenOf(parentID string, instances []*session.Instance) []*session.Insta
 		}
 	}
 	return out
-}
-
-// handleSessionChildren implements `session children [id]` — a read-only fleet
-// view that lists a session's sub-sessions with live status and each child's
-// last asserted completion (from the non-destructive completion ledger). It
-// defaults to the current session and never clears the inbox, so a parent can
-// poll it from any chat without disturbing delivery.
-func handleSessionChildren(profile string, args []string) {
-	fs := flag.NewFlagSet("session children", flag.ExitOnError)
-	jsonOutput := fs.Bool("json", false, "Output as JSON")
-	quiet := fs.Bool("quiet", false, "Minimal output")
-	quietShort := fs.Bool("q", false, "Minimal output (short)")
-	follow := fs.Bool("follow", false, "Stream child state changes as JSONL (one event per line) until interrupted")
-	interval := fs.Duration("interval", 2*time.Second, "Poll interval for --follow")
-	heartbeat := fs.Duration("heartbeat", 60*time.Second, "Heartbeat event interval for --follow (0 disables)")
-	untilDone := fs.Bool("until-done", false, "With --follow: exit 0 once every child is terminal (done sentinel, error, or stopped)")
-	fs.Usage = func() {
-		fmt.Println("Usage: agent-deck session children [id|title] [options]")
-		fmt.Println()
-		fmt.Println("List a session's sub-sessions with live status and last completion.")
-		fmt.Println("Defaults to the current session. Read-only; does not clear the inbox.")
-		fmt.Println()
-		fmt.Println("Options:")
-		fs.PrintDefaults()
-		fmt.Println()
-		fmt.Println("--follow emits JSONL events: snapshot (initial state per child), added,")
-		fmt.Println("status (from/to transition), done (completion sentinel), removed, error,")
-		fmt.Println("plus periodic heartbeat and a final complete line with --until-done.")
-		fmt.Println()
-		fmt.Println("Examples:")
-		fmt.Println("  agent-deck session children --json")
-		fmt.Println("  agent-deck session children --follow                    # live fleet event stream")
-		fmt.Println("  agent-deck session children --follow --until-done      # exits when all children finish")
-	}
-	if err := fs.Parse(normalizeArgs(fs, args)); err != nil {
-		os.Exit(1)
-	}
-	identifier := fs.Arg(0)
-	quietMode := *quiet || *quietShort
-	out := NewCLIOutput(*jsonOutput, quietMode)
-
-	_, instances, _, err := loadSessionData(profile)
-	if err != nil {
-		out.Error(err.Error(), ErrCodeNotFound)
-		os.Exit(1)
-	}
-	// Default to the caller's own session. resolveSelfSessionID prefers
-	// AGENTDECK_INSTANCE_ID (the authoritative full id) over the tmux session
-	// name, whose suffix is only a short hash and won't resolve.
-	if strings.TrimSpace(identifier) == "" {
-		self, err := resolveSelfSessionID()
-		if err != nil {
-			out.Error(err.Error(), ErrCodeNotFound)
-			os.Exit(2)
-		}
-		identifier = self
-	}
-	parent, errMsg, errCode := ResolveSession(identifier, instances)
-	if parent == nil {
-		out.Error(errMsg, errCode)
-		os.Exit(2)
-	}
-
-	if *untilDone && !*follow {
-		out.Error("--until-done requires --follow", ErrCodeInvalidOperation)
-		os.Exit(1)
-	}
-	// A non-positive interval makes time.Sleep a no-op, turning the poll into a
-	// busy-loop that reopens storage every pass. Reject rather than clamp: a
-	// silently different interval than asked for is its own surprise.
-	if *follow && *interval <= 0 {
-		out.Error("--interval must be positive", ErrCodeInvalidOperation)
-		os.Exit(1)
-	}
-	if *follow {
-		// The stream is JSONL by contract; --json/-q are irrelevant here.
-		os.Exit(runChildrenFollow(profile, parent.ID, *interval, *heartbeat, *untilDone, os.Stdout))
-	}
-
-	kids := childrenOf(parent.ID, instances)
-	session.RefreshInstancesForCLIStatus(kids)
-
-	rows := buildChildRows(kids)
-	var human strings.Builder
-	fmt.Fprintf(&human, "Children of %s (%s):\n", parent.Title, parent.ID)
-	for _, row := range rows {
-		done := row.DoneStatus
-		if done == "" {
-			done = "-"
-		}
-		fmt.Fprintf(&human, "  %s  %-20s  %-8s  done=%s  %s\n", row.ID, row.Title, row.Status, done, row.DoneSummary)
-	}
-	if len(kids) == 0 {
-		human.WriteString("  (no sub-sessions)\n")
-	}
-	out.Print(human.String(), map[string]interface{}{"parent": parent.ID, "children": rows})
 }
 
 // handleSessionSearch implements issue #483 — search across Claude session

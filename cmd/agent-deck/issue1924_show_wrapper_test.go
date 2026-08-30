@@ -34,7 +34,7 @@ func TestIssue1924_SessionShowJSONIncludesWrapper(t *testing.T) {
 	}
 
 	stdout, stderr, code := runAgentDeck(t, home,
-		"add", "-t", "wrap-show-test", "-c", "shell", "--no-parent", "--json", projectDir,
+		"add", "-t", "wrap-show-test", "-c", "shell", "--json", projectDir,
 	)
 	if code != 0 {
 		t.Fatalf("add failed (exit %d)\nstdout: %s\nstderr: %s", code, stdout, stderr)

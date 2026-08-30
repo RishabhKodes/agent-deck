@@ -106,7 +106,6 @@ func TestAgentDeckLaunch_ParallelSafe_AllSessionsPersist_RegressionFor1031(t *te
 			// that doesn't require claude/codex installed in CI.
 			cmd := exec.Command(bin, "launch",
 				"-t", titles[i],
-				"--no-parent",
 				"--tmux-socket", socket,
 				"--json",
 				projDirs[i],
@@ -216,7 +215,6 @@ func TestAgentDeckLaunch_ReturnsSessionID_RegressionFor1031(t *testing.T) {
 	stdout, stderr, code := runAgentDeck(t, home,
 		"launch",
 		"-t", "launch-id-test",
-		"--no-parent",
 		"--tmux-socket", socket,
 		"--json",
 		projDir,

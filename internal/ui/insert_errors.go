@@ -7,7 +7,6 @@ import "errors"
 // can decide between a quiet fallback (per-call SendKeys) and a user-facing
 // setError.
 var (
-	errInsertNoTarget       = errors.New("insert mode: no target session")
-	errInsertNoTmuxSession  = errors.New("insert mode: target has no tmux pane")
-	errInsertNoRemoteConfig = errors.New("insert mode: remote not configured")
+	errInsertNoTarget      = errors.New("insert mode: no target session")
+	errInsertNoTmuxSession = errors.New("insert mode: target has no tmux pane")
 )

@@ -171,7 +171,7 @@ func TestHandleAddEmptyGroupDefaultReachesGlobalDefaultPath(t *testing.T) {
 	writeAddUserConfig(t, home, `default_path = "`+globalDefault+`"`+"\n")
 	seedGroupWithSession(t, profile, "MyGroup", "my-group", otherProject)
 
-	handleAdd(profile, []string{"--group", "my-group", "--no-parent", "--title", "pathless", "--quiet"})
+	handleAdd(profile, []string{"--group", "my-group", "--title", "pathless", "--quiet"})
 
 	if got := addedSessionPathByTitle(t, profile, "pathless"); got != globalDefault {
 		t.Fatalf("issue #1879: pathless add into a group with an empty default_path landed in %q, "+
@@ -249,7 +249,7 @@ func TestHandleAddRecentSessionStillUsedWithoutGlobalDefault(t *testing.T) {
 	}
 	seedGroupWithSession(t, profile, "MyGroup", "my-group", otherProject)
 
-	handleAdd(profile, []string{"--group", "my-group", "--no-parent", "--title", "pathless", "--quiet"})
+	handleAdd(profile, []string{"--group", "my-group", "--title", "pathless", "--quiet"})
 
 	if got := addedSessionPathByTitle(t, profile, "pathless"); got != otherProject {
 		t.Fatalf("with no global default_path configured, pathless add landed in %q, "+

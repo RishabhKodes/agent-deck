@@ -70,11 +70,6 @@ type TransitionDaemon struct {
 	// means "never run" — the first SyncOnce pass will perform it.
 	lastInboxTTLSweep time.Time
 
-	// selfheal holds the per-profile observe-only self-heal engines (lazily
-	// created). Driven by this poll loop — NOT a new daemon (F3: no watchdog
-	// stacking). nil until the first enabled pass.
-	selfheal *selfHealRegistry
-
 	// lastProbeStall rate-limits the probe-stall breadcrumb per (profile|key)
 	// so a permanently wedged instance — which times out again on every poll —
 	// logs at most once per probeStallLogInterval instead of flooding the log
@@ -459,13 +454,6 @@ func (d *TransitionDaemon) syncProfile(profile string) time.Duration {
 			}
 		}
 	}
-
-	// Self-heal Stage 1 (observe-only): evaluate every instance through the
-	// profile's observe engine, logging what it WOULD do and taking ZERO action.
-	// Runs every poll (including the first) so the dwell/confirm clocks start
-	// immediately. Reuses the instances/hookStatuses already loaded above — no
-	// extra capture, no new goroutine (F3). Disabled-by-config → cheap no-op.
-	d.runSelfHealObservePass(profile, instances, statuses, hookStatuses, db, time.Now().UTC())
 
 	if !d.initialized[profile] {
 		// Cover fast transitions that completed before we observed a running snapshot.

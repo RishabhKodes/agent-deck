@@ -271,7 +271,7 @@ func TestStatusStale_CLI_CandidateViewAndMutatesNothing(t *testing.T) {
 
 	// Add a session but never start it — the one candidate type reachable
 	// without a live tmux server in a test sandbox.
-	addOut, addErr, err := run("add", projectDir, "-t", "stale-probe", "-c", "shell", "--no-parent", "--json")
+	addOut, addErr, err := run("add", projectDir, "-t", "stale-probe", "-c", "shell", "--json")
 	if err != nil {
 		t.Fatalf("add failed: %v\nstdout=%s\nstderr=%s", err, addOut, addErr)
 	}
@@ -412,7 +412,7 @@ func TestStatusStale_CLI_StartedSessionIsNotNeverStarted(t *testing.T) {
 		return stdout.String(), stderr.String(), err
 	}
 
-	addOut, addErr, err := run("add", projectDir, "-t", "started-probe", "-c", "shell", "--no-parent", "--json")
+	addOut, addErr, err := run("add", projectDir, "-t", "started-probe", "-c", "shell", "--json")
 	if err != nil {
 		t.Fatalf("add failed: %v\nstdout=%s\nstderr=%s", err, addOut, addErr)
 	}
