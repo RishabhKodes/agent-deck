@@ -91,6 +91,7 @@ func (h *Home) enterInsertMode() bool {
 	// proves we can't trust the exit path as the sole reset point.
 	h.insertBuf.Reset()
 	h.insertFlushPending = false
+	h.resetPreviewScroll()
 
 	h.insertMode = true
 	if target.isRemote() {
@@ -169,6 +170,7 @@ func (h *Home) exitInsertMode() {
 	h.insertModeRemoteID = ""
 	h.insertBuf.Reset()
 	h.insertFlushPending = false
+	h.resetPreviewScroll()
 	if h.insertKeySender != nil {
 		_ = h.insertKeySender.Close()
 		h.insertKeySender = nil
@@ -228,6 +230,22 @@ func (h *Home) handleInsertModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyShiftTab:
 		h.flushInsertBuf()
 		h.dispatchInsertNamedKey("BTab")
+		return h, nil
+	case tea.KeyPgUp:
+		h.flushInsertBuf()
+		h.scrollPreviewBy(h.previewPageStep())
+		return h, nil
+	case tea.KeyPgDown:
+		h.flushInsertBuf()
+		h.scrollPreviewBy(-h.previewPageStep())
+		return h, nil
+	case tea.KeyHome:
+		h.flushInsertBuf()
+		h.scrollPreviewToOldest()
+		return h, nil
+	case tea.KeyEnd:
+		h.flushInsertBuf()
+		h.resetPreviewScroll()
 		return h, nil
 	case tea.KeyCtrlC:
 		h.flushInsertBuf()
@@ -442,7 +460,11 @@ func (h *Home) renderInsertModeBar() string {
 	if targetTitle != "" {
 		line += " " + infoStyle.Render("→ "+targetTitle)
 	}
-	line += "  " + hintStyle.Render("Type directly · Enter to submit · Esc to navigate")
+	hint := "Type · Wheel/PgUp/PgDn scroll · Shift-drag selects · Esc navigates"
+	if h.previewScrollOffset > 0 {
+		hint = "History paused · End returns live · Shift-drag selects · Esc navigates"
+	}
+	line += "  " + hintStyle.Render(hint)
 
 	return lipgloss.JoinVertical(lipgloss.Left, border, line)
 }

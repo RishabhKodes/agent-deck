@@ -367,6 +367,28 @@ func (cp *ControlPipe) CapturePaneVia() (string, error) {
 	return cp.SendCommand(fmt.Sprintf("capture-pane -t %s -p -e", cp.sessionName))
 }
 
+// SetClientSize declares the terminal geometry represented by this control
+// client. Control-mode clients are headless by default and therefore do not
+// participate in tmux's window-size arbitration until refresh-client -C is
+// sent. The unified dashboard renders the selected agent from capture-pane;
+// giving its existing control client the Output pane's real size makes TUI
+// applications lay themselves out for the same rows and columns that the user
+// actually sees.
+//
+// Session.Start pins window-size=largest, so a larger native terminal attached
+// to the same session still wins. The dashboard never shrinks another viewer.
+func (cp *ControlPipe) SetClientSize(cols, rows int) error {
+	if cols < 10 || rows < 3 {
+		return fmt.Errorf("invalid control client size: %dx%d", cols, rows)
+	}
+	_, err := cp.SendCommand(controlClientSizeCommand(cols, rows))
+	return err
+}
+
+func controlClientSizeCommand(cols, rows int) string {
+	return fmt.Sprintf("refresh-client -C %dx%d", cols, rows)
+}
+
 // OutputEvents returns a channel that fires when the session produces output.
 // Multiple rapid outputs may be coalesced into fewer channel sends.
 func (cp *ControlPipe) OutputEvents() <-chan struct{} {

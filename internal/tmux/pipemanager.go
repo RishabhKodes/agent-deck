@@ -26,6 +26,11 @@ import (
 type PipeManager struct {
 	pipes map[string]*ControlPipe // sessionName -> pipe
 	mu    sync.RWMutex            // protects pipes and wantPipe
+	// clientSizes records the terminal geometry represented by the dashboard
+	// for a session. Keeping the desired value separately from the pipe makes
+	// it survive a control-client reconnect and lets the UI publish geometry
+	// before the focused session's pipe has finished connecting.
+	clientSizes map[string]clientSize
 
 	// Callback for output events (invoked when %output detected from a session)
 	onOutput func(sessionName string)
@@ -47,12 +52,18 @@ type PipeManager struct {
 	cancel context.CancelFunc
 }
 
+type clientSize struct {
+	cols int
+	rows int
+}
+
 // NewPipeManager creates a new PipeManager. The onOutput callback is invoked
 // whenever a connected session produces terminal output (via %output events).
 func NewPipeManager(ctx context.Context, onOutput func(sessionName string)) *PipeManager {
 	childCtx, cancel := context.WithCancel(ctx)
 	return &PipeManager{
 		pipes:        make(map[string]*ControlPipe),
+		clientSizes:  make(map[string]clientSize),
 		onOutput:     onOutput,
 		reconnecting: make(map[string]bool),
 		ctx:          childCtx,
@@ -123,7 +134,21 @@ func (pm *PipeManager) Connect(sessionName, socketName string) error {
 		return nil
 	}
 	pm.pipes[sessionName] = pipe
+	desiredSize, hasDesiredSize := pm.clientSizes[sessionName]
 	pm.mu.Unlock()
+
+	// A resize failure must not discard an otherwise healthy event/capture
+	// pipe. The UI will retry when its viewport changes, and a later reconnect
+	// re-applies the desired size from clientSizes.
+	if hasDesiredSize {
+		if resizeErr := pipe.SetClientSize(desiredSize.cols, desiredSize.rows); resizeErr != nil {
+			pipeLog.Debug("pipe_client_resize_failed",
+				slog.String("session", logging.SanitizeValue(sessionName)),
+				slog.Int("cols", desiredSize.cols),
+				slog.Int("rows", desiredSize.rows),
+				slog.String("error", resizeErr.Error()))
+		}
+	}
 
 	// Start output event forwarder
 	go pm.forwardOutputEvents(sessionName, pipe)
@@ -168,6 +193,33 @@ func (pm *PipeManager) CapturePane(sessionName string) (string, error) {
 	}
 
 	return pipe.CapturePaneVia()
+}
+
+// SetClientSize makes the selected session's control client represent the
+// dashboard Output pane's actual geometry. If the pipe is still connecting,
+// the desired size is retained and applied by Connect. This is intentionally
+// a no-op success for a missing pipe so a fast cursor/resize event never turns
+// into a user-visible error.
+func (pm *PipeManager) SetClientSize(sessionName string, cols, rows int) error {
+	if strings.TrimSpace(sessionName) == "" {
+		return fmt.Errorf("control client session name is required")
+	}
+	if cols < 10 || rows < 3 {
+		return fmt.Errorf("invalid control client size: %dx%d", cols, rows)
+	}
+
+	pm.mu.Lock()
+	if pm.clientSizes == nil {
+		pm.clientSizes = make(map[string]clientSize)
+	}
+	pm.clientSizes[sessionName] = clientSize{cols: cols, rows: rows}
+	pipe := pm.pipes[sessionName]
+	pm.mu.Unlock()
+
+	if pipe == nil || !pipe.IsAlive() {
+		return nil
+	}
+	return pipe.SetClientSize(cols, rows)
 }
 
 // GetWindowActivity sends a display-message command through the pipe to get

@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   navigation. The `workspace` and `manager` commands are aliases for this UI,
   and normal dashboard actions no longer open attach or native-terminal screens.
 
+### Fixed
+
+- Active Codex Output now uses the dashboard pane's exact terminal geometry and
+  renders the captured cell grid without preview metadata or history
+  transformations, preserving Codex's composer, status, shortcut, and footer
+  UI as it appears in a standalone terminal.
+- Active Output is scrollable in place for every agent with the mouse wheel,
+  PageUp/PageDown, Home, and End. Historical views stay fixed while new output
+  arrives; Shift-drag retains native terminal text selection.
+
 ## [1.15.0] - 2026-08-23
 
 Fail-closed inbox delivery, safer session navigation, and CLI parity across ten commits merged after v1.14.0.

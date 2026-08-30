@@ -315,25 +315,28 @@ type Home struct {
 	analyticsCacheTime     map[string]time.Time                       // TTL cache: sessionID -> cache timestamp
 
 	// State
-	cursor              int                   // Selected item index in flatItems
-	viewOffset          int                   // First visible item index (for scrolling)
-	previewScrollOffset int                   // Lines scrolled up from tail in the preview pane (#574). 0 = tail (default). Reset on cursor move.
-	isAttaching         atomic.Bool           // Prevents View() output during attach (fixes Bubble Tea Issue #431) - atomic for thread safety
-	lastRenderedFrame   string                // Last non-empty frame View produced; re-served while isAttaching so no frame is ever black (#1753). Event-loop goroutine only.
-	statusFilter        session.Status        // Filter sessions by status ("" = all, or specific status)
-	groupScope          string                // Limit TUI to a specific group path ("" = all groups)
-	initialSelect       string                // Session ID or title to preselect on first load (#709). Does NOT scope groups.
-	initialSelectDone   bool                  // Guard so preselection only fires once
-	previewMode         PreviewMode           // What to show in preview pane (both, output-only, analytics-only)
-	groupViewMode       session.GroupViewMode // List partition: normal, active-on-top, populated-on-top (cycled by hotkey 't')
-	err                 error
-	errTime             time.Time  // When error occurred (for auto-dismiss)
-	isReloading         bool       // Visual feedback during auto-reload
-	initialLoading      bool       // True until first loadSessionsMsg received (shows splash screen)
-	isQuitting          bool       // True when user pressed q, shows quitting splash
-	reloadVersion       uint64     // Incremented on each reload to prevent stale background saves
-	reloadMu            sync.Mutex // Protects reloadVersion, isReloading, and lastLoadMtime for thread-safe access
-	lastLoadMtime       time.Time  // File mtime when we last loaded (for external change detection)
+	cursor                   int                   // Selected item index in flatItems
+	viewOffset               int                   // First visible item index (for scrolling)
+	previewScrollOffset      int                   // Lines scrolled up from tail in the preview pane (#574). 0 = live tail.
+	previewScrollSnapshot    string                // Frozen history shown while the user reads above the live tail.
+	previewScrollSnapshotKey string                // Cache key that owns previewScrollSnapshot.
+	previewScrollSnapshotSet bool                  // Distinguishes an intentionally empty snapshot from no snapshot.
+	isAttaching              atomic.Bool           // Prevents View() output during attach (fixes Bubble Tea Issue #431) - atomic for thread safety
+	lastRenderedFrame        string                // Last non-empty frame View produced; re-served while isAttaching so no frame is ever black (#1753). Event-loop goroutine only.
+	statusFilter             session.Status        // Filter sessions by status ("" = all, or specific status)
+	groupScope               string                // Limit TUI to a specific group path ("" = all groups)
+	initialSelect            string                // Session ID or title to preselect on first load (#709). Does NOT scope groups.
+	initialSelectDone        bool                  // Guard so preselection only fires once
+	previewMode              PreviewMode           // What to show in preview pane (both, output-only, analytics-only)
+	groupViewMode            session.GroupViewMode // List partition: normal, active-on-top, populated-on-top (cycled by hotkey 't')
+	err                      error
+	errTime                  time.Time  // When error occurred (for auto-dismiss)
+	isReloading              bool       // Visual feedback during auto-reload
+	initialLoading           bool       // True until first loadSessionsMsg received (shows splash screen)
+	isQuitting               bool       // True when user pressed q, shows quitting splash
+	reloadVersion            uint64     // Incremented on each reload to prevent stale background saves
+	reloadMu                 sync.Mutex // Protects reloadVersion, isReloading, and lastLoadMtime for thread-safe access
+	lastLoadMtime            time.Time  // File mtime when we last loaded (for external change detection)
 
 	// Preview cache (async fetching - View() must be pure, no blocking I/O)
 	previewCache      map[string]string    // previewKey -> cached preview content
@@ -717,6 +720,13 @@ type Home struct {
 	// insertModeSessionID instead.
 	insertModeRemoteName string
 	insertModeRemoteID   string
+	// codexPreviewGeometry is the last Output-pane size published to the
+	// focused Codex session's tmux control client. It suppresses a
+	// refresh-client round trip on every keystroke while still re-publishing
+	// after focus or terminal-size changes.
+	codexPreviewGeometrySession string
+	codexPreviewGeometryCols    int
+	codexPreviewGeometryRows    int
 
 	// Insert-mode keystroke batching (#1094). Per-keystroke tmux send-keys
 	// invocations are too slow when typing fast. Runes are accumulated in
@@ -5240,6 +5250,10 @@ func (h *Home) processStatusUpdate(req statusUpdateRequest) {
 func (h *Home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer h.recordFocusedSession()
 	model, cmd := h.updateInner(msg)
+	// A captured TUI is only faithful when the producer and consumer agree on
+	// geometry. Publish the focused Codex Output pane size after updateInner so
+	// this sees both newly-entered insert mode and the latest WindowSizeMsg.
+	cmd = tea.Batch(cmd, h.syncFocusedCodexGeometryCmd())
 	if !h.fullRepaint {
 		return model, cmd
 	}
@@ -5344,32 +5358,33 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if h.newDialog.IsVisible() || h.forkDialog.IsVisible() {
 				return h, nil
 			}
+			// Output interaction is modal with respect to the selected session:
+			// scrolling over the Output pane reads that chat's captured history,
+			// while scrolling over the session list is ignored so the visible row
+			// cannot drift away from the session still receiving keystrokes.
+			if h.insertMode {
+				if h.mouseInPreview(msg.X, msg.Y) {
+					if msg.Button == tea.MouseButtonWheelUp {
+						h.scrollPreviewBy(outputWheelScrollLines)
+					} else {
+						h.scrollPreviewBy(-outputWheelScrollLines)
+					}
+				}
+				return h, nil
+			}
 			// Preview pane scroll (#574): when the wheel event lands in the
 			// preview region, scroll preview content instead of moving the
 			// list cursor. Dual layout routes by X (preview is the right
 			// column); stacked layout routes by Y (preview is the lower
 			// region, below the horizontal divider). Single layout has no
 			// preview target, so it keeps the legacy list-scroll behaviour.
-			switch h.getLayoutMode() {
-			case LayoutModeDual:
-				leftWidth := h.sessionsPaneWidth()
-				if msg.X >= leftWidth {
-					if msg.Button == tea.MouseButtonWheelUp {
-						h.previewScrollOffset++
-					} else if h.previewScrollOffset > 0 {
-						h.previewScrollOffset--
-					}
-					return h, nil
+			if h.mouseInPreview(msg.X, msg.Y) {
+				if msg.Button == tea.MouseButtonWheelUp {
+					h.scrollPreviewBy(outputWheelScrollLines)
+				} else {
+					h.scrollPreviewBy(-outputWheelScrollLines)
 				}
-			case LayoutModeStacked:
-				if top := h.stackedPreviewTopY(); top >= 0 && msg.Y >= top {
-					if msg.Button == tea.MouseButtonWheelUp {
-						h.previewScrollOffset++
-					} else if h.previewScrollOffset > 0 {
-						h.previewScrollOffset--
-					}
-					return h, nil
-				}
+				return h, nil
 			}
 			// Main session list scroll (cursor movement also resets any
 			// stale preview offset so the new session starts at its tail).
@@ -5377,7 +5392,7 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if h.cursor > 0 {
 					h.cursor--
 					h.skipDivider(-1)
-					h.previewScrollOffset = 0
+					h.resetPreviewScroll()
 					h.syncViewport()
 					h.markNavigationActivity()
 					return h, h.fetchSelectedPreview()
@@ -5386,7 +5401,7 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if h.cursor < len(h.flatItems)-1 {
 					h.cursor++
 					h.skipDivider(1)
-					h.previewScrollOffset = 0
+					h.resetPreviewScroll()
 					h.syncViewport()
 					h.markNavigationActivity()
 					return h, h.fetchSelectedPreview()
@@ -6755,6 +6770,26 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			h.previewCache[msg.previewKey] = msg.content
 		}
 		h.previewCacheMu.Unlock()
+		return h, nil
+
+	case codexPreviewGeometryMsg:
+		if msg.err != nil {
+			uiLog.Debug("codex_preview_geometry_failed",
+				"session_id", msg.sessionID,
+				"error", msg.err.Error())
+			return h, nil
+		}
+		// refresh-client -C causes tmux to send SIGWINCH to Codex. Capture the
+		// resulting frame immediately when this is still the focused session;
+		// stale completions from a session the user already left are ignored.
+		if h.insertMode && h.insertModeSessionID == msg.sessionID {
+			if inst, key, windowIndex := h.selectedPreviewTarget(); inst != nil && inst.ID == msg.sessionID {
+				h.previewCacheMu.Lock()
+				h.previewFetchingID = key
+				h.previewCacheMu.Unlock()
+				return h, h.fetchPreview(inst, key, windowIndex)
+			}
+		}
 		return h, nil
 
 	case analyticsFetchedMsg:
@@ -8312,7 +8347,7 @@ func (h *Home) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 		// Single click: select item
 		h.cursor = itemIndex
-		h.previewScrollOffset = 0
+		h.resetPreviewScroll()
 		h.syncViewport()
 		return h, h.markNavigationAndFetchPreview()
 	}
@@ -8489,7 +8524,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return h, nil
 
 	case "up", "k", "ctrl+p":
-		h.previewScrollOffset = 0
+		h.resetPreviewScroll()
 		if h.cursor > 0 {
 			h.cursor--
 			h.skipDivider(-1)
@@ -8502,7 +8537,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return h, nil
 
 	case "down", "j", "ctrl+n":
-		h.previewScrollOffset = 0
+		h.resetPreviewScroll()
 		if h.cursor < len(h.flatItems)-1 {
 			h.cursor++
 			h.skipDivider(1)
@@ -8525,7 +8560,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			h.cursor = 0
 		}
 		h.skipDivider(-1)
-		h.previewScrollOffset = 0
+		h.resetPreviewScroll()
 		h.syncViewport()
 		h.markNavigationActivity()
 		return h, h.fetchSelectedPreview()
@@ -8543,7 +8578,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			h.cursor = 0
 		}
 		h.skipDivider(1)
-		h.previewScrollOffset = 0
+		h.resetPreviewScroll()
 		h.syncViewport()
 		h.markNavigationActivity()
 		return h, h.fetchSelectedPreview()
@@ -8558,7 +8593,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			h.cursor = 0
 		}
 		h.skipDivider(-1)
-		h.previewScrollOffset = 0
+		h.resetPreviewScroll()
 		h.syncViewport()
 		h.markNavigationActivity()
 		return h, h.fetchSelectedPreview()
@@ -8576,7 +8611,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			h.cursor = 0
 		}
 		h.skipDivider(1)
-		h.previewScrollOffset = 0
+		h.resetPreviewScroll()
 		h.syncViewport()
 		h.markNavigationActivity()
 		return h, h.fetchSelectedPreview()
@@ -8584,7 +8619,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "home": // Jump to first item
 		h.cursor = 0
 		h.skipDivider(1)
-		h.previewScrollOffset = 0
+		h.resetPreviewScroll()
 		h.syncViewport()
 		h.markNavigationActivity()
 		return h, h.fetchSelectedPreview()
@@ -8595,7 +8630,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			h.cursor = 0
 		}
 		h.skipDivider(-1)
-		h.previewScrollOffset = 0
+		h.resetPreviewScroll()
 		h.syncViewport()
 		h.markNavigationActivity()
 		return h, h.fetchSelectedPreview()
@@ -17246,9 +17281,56 @@ func (h *Home) renderRemotePreview(item session.Item, width, height int) string 
 	b.WriteString(dimStyle.Render("Last response") + "\n")
 	b.WriteString(strings.Repeat("-", max(1, min(width-4, 40))))
 	b.WriteString("\n")
+	previewContent = h.previewContentForScroll(pvKey, previewContent)
 	previewContent = truncateRemotePreviewContent(previewContent)
 	if hasPreview && strings.TrimSpace(previewContent) != "" {
-		b.WriteString(previewContent)
+		lines := strings.Split(previewContent, "\n")
+		for len(lines) > 0 && strings.TrimSpace(ansi.Strip(lines[len(lines)-1])) == "" {
+			lines = lines[:len(lines)-1]
+		}
+
+		// Keep one row for the remote-session action hint. If the response
+		// overflows, use one additional compact row for its history position.
+		usedRows := strings.Count(b.String(), "\n") + 1
+		availableRows := height - usedRows - 1
+		if availableRows < 1 {
+			availableRows = 1
+		}
+		truncated := len(lines) > availableRows
+		linesAbove, linesBelow := 0, 0
+		if truncated {
+			contentRows := availableRows - 1
+			if contentRows < 1 {
+				contentRows = 1
+			}
+			maxOffset := len(lines) - contentRows
+			offset := h.clampPreviewScrollOffset(maxOffset)
+			endIdx := len(lines) - offset
+			startIdx := endIdx - contentRows
+			if startIdx < 0 {
+				startIdx = 0
+			}
+			linesAbove = startIdx
+			linesBelow = len(lines) - endIdx
+			lines = lines[startIdx:endIdx]
+		} else if h.previewScrollOffset > 0 {
+			h.resetPreviewScroll()
+		}
+
+		if truncated {
+			b.WriteString(dimStyle.Render(fmt.Sprintf("⋮ %d more lines above · %d below", linesAbove, linesBelow)))
+			b.WriteString("\n")
+		}
+		maxWidth := max(1, width-2)
+		for _, line := range lines {
+			line = stripDisplayErasingEscapes(stripControlCharsPreserveANSI(line))
+			line = cellTruncate(line, maxWidth, "")
+			b.WriteString(line)
+			if strings.ContainsRune(line, 0x1b) {
+				b.WriteString("\x1b[0m")
+			}
+			b.WriteString("\n")
+		}
 		b.WriteString("\n\n")
 	} else if hasFetched {
 		b.WriteString(dimStyle.Render("No response available yet."))
@@ -17910,6 +17992,28 @@ func (h *Home) renderPreviewPane(width, height int) string {
 	pvKey := selected.ID
 	if item.Type == session.ItemTypeWindow {
 		pvKey = previewCacheKey(selected.ID, item.WindowIndex)
+	}
+
+	// While the user is interacting with Codex, the Output pane is the Codex
+	// terminal—not an Agent Deck metadata card. Render the captured cell grid
+	// directly so the composer, status line, shortcuts, and other responsive
+	// Codex chrome occupy the same rows they do in a standalone terminal.
+	if h.isFocusedCodexTerminal(selected) {
+		h.previewCacheMu.RLock()
+		preview, hasCached := h.previewCache[pvKey]
+		h.previewCacheMu.RUnlock()
+		preview = h.previewContentForScroll(pvKey, preview)
+		rendered, offset := renderFocusedCodexTerminalAtOffset(
+			preview, hasCached, width, height, h.previewScrollOffset,
+		)
+		if h.previewScrollOffset > 0 {
+			if offset == 0 {
+				h.resetPreviewScroll()
+			} else {
+				h.previewScrollOffset = offset
+			}
+		}
+		return rendered
 	}
 
 	// Session info header box
@@ -18799,6 +18903,7 @@ func (h *Home) renderPreviewPane(width, height int) string {
 	h.previewCacheMu.RLock()
 	preview, hasCached := h.previewCache[pvKey]
 	h.previewCacheMu.RUnlock()
+	preview = h.previewContentForScroll(pvKey, preview)
 
 	// Show worktree setup animation when setup script is running
 	setupTime, isSetupRunning := h.setupRunningSessions[selected.ID]
@@ -18852,60 +18957,47 @@ func (h *Home) renderPreviewPane(width, height int) string {
 			return b.String()
 		}
 
-		maxLines := height - headerLines - 1 // -1 for potential truncation indicator
-		if maxLines < 1 {
-			maxLines = 1
+		availableRows := height - headerLines
+		if availableRows < 1 {
+			availableRows = 1
 		}
 
-		// Track if we're truncating from the top (for indicator)
-		truncatedFromTop := len(lines) > maxLines
-		truncatedCount := 0
-		scrolledBelow := 0
-		if truncatedFromTop {
-			// Reserve one line for the "⋮ N more above" indicator
-			maxLines--
-			if maxLines < 1 {
-				maxLines = 1
+		// A single compact position row covers both directions. Reserve it
+		// whenever history overflows; the remaining rows are the actual chat
+		// viewport. Offsets are measured from the live tail.
+		truncated := len(lines) > availableRows
+		linesAbove, linesBelow := 0, 0
+		if truncated {
+			contentRows := availableRows - 1
+			if contentRows < 1 {
+				contentRows = 1
 			}
-			// #574: slide the visible window up by previewScrollOffset lines
-			// so the user can see older output instead of the tail. Clamp
-			// the offset to the valid range so arbitrary values don't go
-			// out of bounds or below zero.
-			maxOffset := len(lines) - maxLines
-			if maxOffset < 0 {
-				maxOffset = 0
-			}
-			if h.previewScrollOffset > maxOffset {
-				h.previewScrollOffset = maxOffset
-			}
-			if h.previewScrollOffset < 0 {
-				h.previewScrollOffset = 0
-			}
-			endIdx := len(lines) - h.previewScrollOffset
-			startIdx := endIdx - maxLines
+			maxOffset := len(lines) - contentRows
+			offset := h.clampPreviewScrollOffset(maxOffset)
+			endIdx := len(lines) - offset
+			startIdx := endIdx - contentRows
 			if startIdx < 0 {
 				startIdx = 0
 			}
-			truncatedCount = startIdx
-			scrolledBelow = len(lines) - endIdx
+			linesAbove = startIdx
+			linesBelow = len(lines) - endIdx
 			lines = lines[startIdx:endIdx]
-		} else {
-			// Content fits without truncation — offset has no effect, keep state consistent.
-			h.previewScrollOffset = 0
+		} else if h.previewScrollOffset > 0 {
+			h.resetPreviewScroll()
 		}
-		_ = scrolledBelow // reserved for a future "⋮ N below" indicator; offset clamp already prevents stale state
 
 		maxWidth := width - 4
 		if maxWidth < 10 {
 			maxWidth = 10
 		}
 
-		// Show truncation indicator if content was cut from top
-		if truncatedFromTop {
+		// Show both distances so a historical view never looks live by
+		// accident. The footer additionally advertises End as the escape hatch.
+		if truncated {
 			truncIndicator := lipgloss.NewStyle().
 				Foreground(ColorText).
 				Italic(true).
-				Render(fmt.Sprintf("⋮ %d more lines above", truncatedCount))
+				Render(fmt.Sprintf("⋮ %d more lines above · %d below", linesAbove, linesBelow))
 			b.WriteString(truncIndicator)
 			b.WriteString("\n")
 		}

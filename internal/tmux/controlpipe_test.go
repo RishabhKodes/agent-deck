@@ -124,6 +124,47 @@ func TestControlPipe_SendCommand(t *testing.T) {
 	assert.NotEmpty(t, strings.TrimSpace(output))
 }
 
+func TestControlClientSizeCommand(t *testing.T) {
+	if got, want := controlClientSizeCommand(132, 41), "refresh-client -C 132x41"; got != want {
+		t.Fatalf("control client resize command = %q, want %q", got, want)
+	}
+}
+
+func TestPipeManager_SetClientSizeBeforeConnect(t *testing.T) {
+	pm := NewPipeManager(context.Background(), nil)
+	defer pm.Close()
+
+	if err := pm.SetClientSize("focused-codex", 132, 41); err != nil {
+		t.Fatalf("SetClientSize before connect: %v", err)
+	}
+	pm.mu.RLock()
+	got, ok := pm.clientSizes["focused-codex"]
+	pm.mu.RUnlock()
+	if !ok || got.cols != 132 || got.rows != 41 {
+		t.Fatalf("desired client size was not retained: got %#v, present=%v", got, ok)
+	}
+
+	for _, tc := range []struct {
+		name string
+		cols int
+		rows int
+	}{
+		{name: "empty session", cols: 80, rows: 24},
+		{name: "narrow", cols: 9, rows: 24},
+		{name: "short", cols: 80, rows: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			name := "focused-codex"
+			if tc.name == "empty session" {
+				name = ""
+			}
+			if err := pm.SetClientSize(name, tc.cols, tc.rows); err == nil {
+				t.Fatalf("SetClientSize(%q, %d, %d) accepted invalid input", name, tc.cols, tc.rows)
+			}
+		})
+	}
+}
+
 func TestControlPipe_DeadSession(t *testing.T) {
 	skipIfNoTmuxServer(t)
 

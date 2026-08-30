@@ -62,8 +62,12 @@ agent-deck
 The session tree stays visible on the left while the selected agent's live
 terminal appears in **Output**. Move with `j`/`k` or the arrow keys, then press
 `Enter` (or click the Output pane) to type directly into that agent. Press
-`Enter` to submit a prompt and `Esc` to return to list navigation. No manager,
-workspace, attach, or native-terminal window replaces the dashboard.
+`Enter` to submit a prompt and `Esc` to return to list navigation. While Output
+is active, use the mouse wheel or PageUp/PageDown to read chat history, Home to
+jump to the oldest captured line, and End to resume live output. A historical
+view stays fixed as new output arrives; Shift-drag selects text using the
+terminal's native selection. No manager, workspace, attach, or native-terminal
+window replaces the dashboard.
 
 Session actions are overlays on this same screen: `n` opens New Session, `m`
 opens MCP Manager, and `f`/`F`, `/`, `?`, `S`, `$`, and `t` expose their usual
@@ -98,6 +102,8 @@ agent-deck web                    # Start web UI on http://127.0.0.1:8420
 |-----|--------|
 | `Enter` | Interact in Output / submit prompt |
 | `Esc` | Return from Output to navigation |
+| `Wheel` / `PageUp` / `PageDown` | Scroll active Output history |
+| `Home` / `End` | Oldest captured Output / resume live Output |
 | `n` | New session |
 | `f` / `F` | Fork (quick / dialog) |
 | `A` / `Shift+U` | Archive / unarchive session |

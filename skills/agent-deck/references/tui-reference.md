@@ -196,6 +196,10 @@ recent_days = 30
 - Shows last ~500 lines of session's tmux pane
 - Auto-updates every 2 seconds
 - Launch animation: 6-15s for Claude/Gemini
+- While Output is active, mouse wheel and PageUp/PageDown scroll in place
+- Home jumps to oldest captured history; End resumes live output
+- A scrolled view stays fixed while new output arrives
+- Shift-drag uses the terminal's native text selection
 
 ## Layout
 

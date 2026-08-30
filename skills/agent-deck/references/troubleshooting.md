@@ -17,24 +17,25 @@ Common issues and solutions for agent-deck.
 
 ### Cannot Select or Copy Terminal Text
 
-On the agent-deck home screen, select a local session and press `V` to copy its
-current visible terminal text, including links, as plain text.
+Activate Output with `Enter` or a click. While Output is active, use Shift-drag
+to select Claude, Codex, or any other agent's rendered text, then use the
+terminal's normal copy shortcut. Agent Deck keeps ordinary mouse reporting so
+the wheel can scroll chat history in place.
 
-When attached to a session, tmux mouse mode owns normal drag gestures. Hold
-Option while dragging in iTerm2. Hold Shift while dragging in most Linux
-terminals and Windows Terminal, including WSL2. This bypasses application mouse
-reporting and lets the terminal perform native selection.
+Mouse wheel and PageUp/PageDown scroll the active Output pane. Home jumps to
+the oldest captured line and End returns to live output. New agent output does
+not move a historical view while you are reading it.
 
-If your terminal has no selection bypass, disable mouse mode for new and
-reconnected sessions:
+On the agent-deck home screen, you can also select a local session and press
+`V` to copy its current visible terminal text, including links, as plain text.
 
-```toml
-[tmux]
-mouse = false
-```
+Hold Option while dragging in iTerm2, or Shift in most Linux terminals and
+Windows Terminal. This bypasses dashboard mouse reporting for native selection.
 
-This restores native drag selection, but disables tmux mouse scrolling, pane
-resizing, and mouse copy mode.
+If your terminal has no modifier-based selection bypass, press `V` on a local
+session to copy its current visible pane instead. The `[tmux] mouse` setting
+controls the managed tmux sessions themselves and is independent of dashboard
+selection.
 
 ### Flags Ignored
 

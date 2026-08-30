@@ -1741,6 +1741,8 @@ func TestRenderRemotePreviewTruncatesCachedResponseLines(t *testing.T) {
 		Path:   "/srv/project",
 	}
 	item := session.Item{Type: session.ItemTypeRemoteSession, RemoteSession: &remote, RemoteName: "myserver"}
+	home.flatItems = []session.Item{item}
+	home.cursor = 0
 
 	lines := make([]string, 250)
 	for i := range lines {
@@ -1752,8 +1754,14 @@ func TestRenderRemotePreviewTruncatesCachedResponseLines(t *testing.T) {
 	if strings.Contains(rendered, "line-049") {
 		t.Fatalf("rendered preview should drop lines outside the retained tail, got: %q", rendered)
 	}
-	if !strings.Contains(rendered, "line-050") || !strings.Contains(rendered, "line-249") {
-		t.Fatalf("rendered preview should retain the last 200 lines, got: %q", rendered)
+	if strings.Contains(rendered, "line-050") || !strings.Contains(rendered, "line-249") {
+		t.Fatalf("live remote preview should show the visible tail, got: %q", rendered)
+	}
+
+	home.scrollPreviewToOldest()
+	rendered = home.renderRemotePreview(item, 80, 20)
+	if !strings.Contains(rendered, "line-050") || strings.Contains(rendered, "line-049") {
+		t.Fatalf("oldest remote viewport should begin at the retained 200-line boundary, got: %q", rendered)
 	}
 }
 
@@ -1772,7 +1780,7 @@ func TestRenderRemotePreviewTruncatesCachedResponseBytes(t *testing.T) {
 
 	prefix := "TRUNCATE-ME"
 	tail := "KEEP-TAIL"
-	content := prefix + strings.Repeat("x", 20*1024) + tail
+	content := prefix + strings.Repeat("x", 20*1024) + "\n" + tail
 	home.previewCache[remotePreviewCacheKey("myserver", "remote-123")] = content
 
 	rendered := home.renderRemotePreview(item, 80, 20)

@@ -47,7 +47,7 @@ func previewScrollSessionWithLines(t *testing.T, width, height, numLines int) (*
 	return h, inst
 }
 
-// Test 1: Mouse wheel over the preview pane region (dual layout) increments
+// Test 1: Mouse wheel over the preview pane region (dual layout) advances
 // previewScrollOffset and does NOT move the session list cursor.
 func TestPreviewScroll_MouseWheel_OverPreviewPane_IncrementsOffset(t *testing.T) {
 	h, _ := previewScrollSessionWithLines(t, 120, 40, 50)
@@ -58,8 +58,8 @@ func TestPreviewScroll_MouseWheel_OverPreviewPane_IncrementsOffset(t *testing.T)
 	model, _ := h.Update(msg)
 	h = model.(*Home)
 
-	if h.previewScrollOffset != 1 {
-		t.Fatalf("WheelUp over preview: previewScrollOffset=%d, want 1", h.previewScrollOffset)
+	if h.previewScrollOffset != outputWheelScrollLines {
+		t.Fatalf("WheelUp over preview: previewScrollOffset=%d, want %d", h.previewScrollOffset, outputWheelScrollLines)
 	}
 	if h.cursor != 0 {
 		t.Fatalf("WheelUp over preview: cursor=%d, want 0 (cursor should not move)", h.cursor)
@@ -247,8 +247,8 @@ func TestPreviewScroll_StackedLayoutMode_WheelRoutesByY(t *testing.T) {
 	model, _ := h.Update(tea.MouseMsg{X: 10, Y: top, Button: tea.MouseButtonWheelUp})
 	h = model.(*Home)
 
-	if h.previewScrollOffset != 1 {
-		t.Fatalf("stacked WheelUp at Y=%d (preview region): previewScrollOffset=%d, want 1", top, h.previewScrollOffset)
+	if h.previewScrollOffset != outputWheelScrollLines {
+		t.Fatalf("stacked WheelUp at Y=%d (preview region): previewScrollOffset=%d, want %d", top, h.previewScrollOffset, outputWheelScrollLines)
 	}
 	if h.cursor != 0 {
 		t.Fatalf("stacked WheelUp at Y=%d (preview region): cursor=%d, want 0 (cursor should not move)", top, h.cursor)
@@ -267,6 +267,85 @@ func TestPreviewScroll_StackedLayoutMode_WheelRoutesByY(t *testing.T) {
 	}
 	if h.previewScrollOffset != 0 {
 		t.Fatalf("stacked WheelDown at Y=%d (list region): previewScrollOffset=%d, want 0 (should reset on cursor move)", top-1, h.previewScrollOffset)
+	}
+}
+
+func TestActiveOutputWheelScrollsChatAndIgnoresSessionList(t *testing.T) {
+	h, inst := previewScrollSessionWithLines(t, 120, 40, 80)
+	h.insertMode = true
+	h.insertModeSessionID = inst.ID
+
+	// The active Output target is modal: wheel input over the list must not
+	// move the row away from the session that still receives typed keys.
+	model, _ := h.Update(tea.MouseMsg{X: 10, Y: 10, Button: tea.MouseButtonWheelDown})
+	h = model.(*Home)
+	if h.cursor != 0 || h.previewScrollOffset != 0 {
+		t.Fatalf("wheel over list changed active target: cursor=%d offset=%d", h.cursor, h.previewScrollOffset)
+	}
+
+	model, _ = h.Update(tea.MouseMsg{X: 100, Y: 10, Button: tea.MouseButtonWheelUp})
+	h = model.(*Home)
+	if h.previewScrollOffset != outputWheelScrollLines {
+		t.Fatalf("active Output wheel offset=%d, want %d", h.previewScrollOffset, outputWheelScrollLines)
+	}
+	if !h.previewScrollSnapshotSet || h.previewScrollSnapshotKey != inst.ID {
+		t.Fatal("active Output did not freeze the selected chat before scrolling")
+	}
+}
+
+func TestActiveOutputScrollHoldsPositionUntilEnd(t *testing.T) {
+	h, inst := previewScrollSessionWithLines(t, 120, 40, 80)
+	h.insertMode = true
+	h.insertModeSessionID = inst.ID
+
+	model, _ := h.Update(tea.MouseMsg{X: 100, Y: 10, Button: tea.MouseButtonWheelUp})
+	h = model.(*Home)
+
+	// Simulate a normal background refresh while history is being read. The
+	// live cache advances, but the rendered viewport must stay on its snapshot.
+	h.previewCacheMu.Lock()
+	h.previewCache[inst.ID] += "\nbrand-new-live-line"
+	h.previewCacheMu.Unlock()
+	scrolled := h.renderPreviewPane(78, 20)
+	if strings.Contains(scrolled, "brand-new-live-line") {
+		t.Fatalf("fresh output moved a frozen historical viewport:\n%s", scrolled)
+	}
+	if !strings.Contains(h.renderInsertModeBar(), "History paused") {
+		t.Fatal("active Output footer did not disclose that live output is paused")
+	}
+
+	model, _ = h.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	h = model.(*Home)
+	if h.previewScrollOffset != 0 || h.previewScrollSnapshotSet {
+		t.Fatal("End did not release frozen history and return to the live tail")
+	}
+	if live := h.renderPreviewPane(78, 20); !strings.Contains(live, "brand-new-live-line") {
+		t.Fatalf("End did not reveal the latest cached output:\n%s", live)
+	}
+}
+
+func TestActiveOutputKeyboardScrollControls(t *testing.T) {
+	h, inst := previewScrollSessionWithLines(t, 120, 40, 100)
+	h.insertMode = true
+	h.insertModeSessionID = inst.ID
+
+	model, _ := h.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	h = model.(*Home)
+	if h.previewScrollOffset != h.previewPageStep() {
+		t.Fatalf("PageUp offset=%d, want page step %d", h.previewScrollOffset, h.previewPageStep())
+	}
+
+	model, _ = h.Update(tea.KeyMsg{Type: tea.KeyHome})
+	h = model.(*Home)
+	view := h.renderPreviewPane(78, 20) // clamps the Home sentinel
+	if !strings.Contains(view, "line-0") {
+		t.Fatalf("Home did not reveal oldest captured history:\n%s", view)
+	}
+
+	model, _ = h.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	h = model.(*Home)
+	if h.previewScrollOffset != 0 {
+		t.Fatalf("End offset=%d, want live tail", h.previewScrollOffset)
 	}
 }
 
