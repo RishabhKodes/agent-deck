@@ -7556,7 +7556,7 @@ func (h *Home) activateSelectedInPlace() (tea.Model, tea.Cmd) {
 				return h, nil
 			}
 			if h.enterInsertMode() {
-				return h, h.fetchSelectedPreview()
+				return h, tea.Batch(disableMouseCmd(), h.fetchSelectedPreview())
 			}
 			return h, nil
 		}
@@ -7567,7 +7567,7 @@ func (h *Home) activateSelectedInPlace() (tea.Model, tea.Cmd) {
 
 	case session.ItemTypeWindow, session.ItemTypeRemoteSession:
 		if h.enterInsertMode() {
-			return h, h.fetchSelectedPreview()
+			return h, tea.Batch(disableMouseCmd(), h.fetchSelectedPreview())
 		}
 
 	case session.ItemTypeGroup:
@@ -8296,7 +8296,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return h, nil
 			}
 			if h.enterInsertMode() {
-				return h, h.fetchSelectedPreview()
+				return h, tea.Batch(disableMouseCmd(), h.fetchSelectedPreview())
 			}
 		}
 		return h, nil

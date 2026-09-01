@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -17,10 +18,21 @@ func PasteImage() (string, error) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		if _, err := exec.LookPath("pngpaste"); err != nil {
-			return "", fmt.Errorf("image paste requires pngpaste (install it with: brew install pngpaste)")
+		if _, err := exec.LookPath("pngpaste"); err == nil {
+			cmd = exec.Command("pngpaste", name)
+		} else if _, err := exec.LookPath("osascript"); err == nil {
+			// pngpaste is convenient but optional. macOS's built-in AppleScript
+			// bridge can write the PNG clipboard flavor without extra software.
+			path := strings.ReplaceAll(name, `\`, `\\`)
+			path = strings.ReplaceAll(path, `"`, `\"`)
+			script := fmt.Sprintf(`set pngData to the clipboard as «class PNGf»
+set f to open for access POSIX file "%s" with write permission
+write pngData to f
+close access f`, path)
+			cmd = exec.Command("osascript", "-e", script)
+		} else {
+			return "", fmt.Errorf("image paste is unavailable (install pngpaste with: brew install pngpaste)")
 		}
-		cmd = exec.Command("pngpaste", name)
 	case "linux":
 		if _, err := exec.LookPath("wl-paste"); err == nil {
 			cmd = exec.Command("wl-paste", "--type", "image/png")

@@ -170,11 +170,19 @@ func (h *Home) exitInsertMode() {
 // users can edit input and navigate menus inside the focused session
 // (claude often shows arrow-driven pickers).
 func (h *Home) handleInsertModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Shift+Enter is relayed as a private-use marker by the keyboard
+	// compatibility reader. Treat it as a literal newline for every agent;
+	// plain Enter remains the submit key.
+	if msg.String() == string(shiftEnterMarker) {
+		h.flushInsertBuf()
+		h.dispatchInsertKey("\n", false)
+		return h, nil
+	}
 	switch msg.Type {
 	case tea.KeyEsc:
 		h.flushInsertBuf()
 		h.exitInsertMode()
-		return h, nil
+		return h, tea.EnableMouseCellMotion
 	case tea.KeyEnter:
 		h.flushInsertBuf()
 		h.dispatchInsertKey("", true)
