@@ -3,6 +3,7 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -173,7 +174,9 @@ func (h *Home) handleInsertModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Shift+Enter is relayed as a private-use marker by the keyboard
 	// compatibility reader. Treat it as a literal newline for every agent;
 	// plain Enter remains the submit key.
-	if msg.String() == string(shiftEnterMarker) {
+	keyString := strings.Trim(msg.String(), "[]")
+	if keyString == string(shiftEnterMarker) || keyString == "shift+enter" ||
+		(msg.Type == tea.KeyEnter && msg.Alt) {
 		h.flushInsertBuf()
 		h.dispatchInsertKey("\n", false)
 		return h, nil
