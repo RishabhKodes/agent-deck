@@ -5077,6 +5077,14 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return h, nil
+	case insertImageResultMsg:
+		if msg.err != nil {
+			h.setError(msg.err)
+		} else if msg.path != "" {
+			h.dispatchInsertKey(msg.path, false)
+			h.setError(fmt.Errorf("pasted image: %s", msg.path))
+		}
+		return h, nil
 
 	case sessionCreatedMsg:
 		uiLog.Info("session_created_msg",

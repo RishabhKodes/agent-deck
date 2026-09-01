@@ -51,6 +51,9 @@ reference. Select a profile with `-p/--profile` and a group with
 
 `j`/`k` or arrows move through sessions. `Enter` opens the selected session's
 Output pane; type and press `Enter` to submit, or `Esc` to return to the list.
+While typing in a session, `Ctrl+V` imports an image from the system clipboard
+to a temporary PNG and inserts its path into the prompt (macOS requires
+`pngpaste`; Linux supports `wl-paste` or `xclip`).
 `n` creates a session, `m` manages MCPs, `s` manages skills, `f` forks, `r`
 renames, `R` restarts, `d` removes, `/` searches, `$` opens cost tracking, and
 `?` shows the in-app help.

@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/RishabhKodes/agent-deck/internal/clipboard"
 	"github.com/RishabhKodes/agent-deck/internal/session"
 )
 
@@ -40,6 +41,18 @@ const insertPreviewEchoDelay = 60 * time.Millisecond
 // keystroke. Its handler re-fetches the focused session's preview, bypassing
 // the normal 2s previewCacheTTL so the user sees their own typing promptly.
 type insertPreviewRefreshMsg struct{}
+
+type insertImageResultMsg struct {
+	path string
+	err  error
+}
+
+func (h *Home) pasteImageIntoInsertMode() tea.Cmd {
+	return func() tea.Msg {
+		path, err := clipboard.PasteImage()
+		return insertImageResultMsg{path: path, err: err}
+	}
+}
 
 // Output interaction (#1069 feature 1, by @ddorman-dn): modal type-through for
 // the TUI. After pressing Enter or `I` on a focused session, keystrokes
@@ -227,6 +240,9 @@ func (h *Home) handleInsertModeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		h.flushInsertBuf()
 		h.dispatchInsertNamedKey("C-d")
 		return h, nil
+	case tea.KeyCtrlV:
+		h.flushInsertBuf()
+		return h, h.pasteImageIntoInsertMode()
 	default:
 		// Other keys (function keys, more exotic ctrl combos) intentionally
 		// dropped — surface them only if a user actually reports needing them.

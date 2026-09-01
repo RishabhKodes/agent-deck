@@ -1,0 +1,55 @@
+package clipboard
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"time"
+)
+
+// PasteImage saves the first image currently in the system clipboard to a
+// temporary PNG file and returns its path. Clipboard image formats are exposed
+// by the standard desktop tools on Linux and by pngpaste on macOS.
+func PasteImage() (string, error) {
+	name := filepath.Join(os.TempDir(), fmt.Sprintf("agent-deck-paste-%d.png", time.Now().UnixNano()))
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		if _, err := exec.LookPath("pngpaste"); err != nil {
+			return "", fmt.Errorf("image paste requires pngpaste (install it with: brew install pngpaste)")
+		}
+		cmd = exec.Command("pngpaste", name)
+	case "linux":
+		if _, err := exec.LookPath("wl-paste"); err == nil {
+			cmd = exec.Command("wl-paste", "--type", "image/png")
+		} else if _, err := exec.LookPath("xclip"); err == nil {
+			cmd = exec.Command("xclip", "-selection", "clipboard", "-t", "image/png", "-o")
+		} else {
+			return "", fmt.Errorf("image paste requires wl-paste or xclip")
+		}
+	default:
+		return "", fmt.Errorf("image paste is not supported on %s", runtime.GOOS)
+	}
+
+	if cmd.Args[0] == "pngpaste" {
+		if err := cmd.Run(); err != nil {
+			_ = os.Remove(name)
+			return "", fmt.Errorf("could not read image clipboard: %w", err)
+		}
+	} else {
+		out, err := cmd.Output()
+		if err != nil {
+			return "", fmt.Errorf("could not read image clipboard: %w", err)
+		}
+		if err := os.WriteFile(name, out, 0o600); err != nil {
+			return "", fmt.Errorf("could not save pasted image: %w", err)
+		}
+	}
+	if info, err := os.Stat(name); err != nil || info.Size() == 0 {
+		_ = os.Remove(name)
+		return "", fmt.Errorf("clipboard does not contain an image")
+	}
+	return name, nil
+}
