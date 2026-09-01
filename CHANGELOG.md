@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   UI as it appears in a standalone terminal.
 - Active Output is scrollable in place for every agent with the mouse wheel,
   PageUp/PageDown, Home, and End. Historical views stay fixed while new output
-  arrives; Shift-drag retains native terminal text selection.
+  arrives; Output activation keeps mouse reporting enabled so wheel events
+  reach the chat viewport, while Shift-drag retains native terminal text
+  selection.
 
 ## [1.15.0] - 2026-08-23
 

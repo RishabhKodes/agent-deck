@@ -9,10 +9,3 @@ import tea "github.com/charmbracelet/bubbletea"
 func (h *Home) restoreMouseModeAfterExternalScreenCmd() tea.Cmd {
 	return tea.EnableMouseCellMotion
 }
-
-// disableMouseCmd temporarily releases mouse reporting while the Output
-// interaction surface is active, allowing the terminal emulator to perform
-// native drag-to-select and copy.
-func disableMouseCmd() tea.Cmd {
-	return func() tea.Msg { return tea.DisableMouse() }
-}
