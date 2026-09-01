@@ -55,8 +55,9 @@ While typing in a session, `Ctrl+V` imports an image from the system clipboard
 to a temporary PNG and inserts its path into the prompt (macOS requires
 `pngpaste`; Linux supports `wl-paste` or `xclip`).
 `n` creates a session, `m` manages MCPs, `s` manages skills, `f` forks, `r`
-renames, `R` restarts, `d` removes, `/` searches, `$` opens cost tracking, and
-`?` shows the in-app help.
+renames, `R` restarts, `d` removes, `c` copies the latest generated response,
+`V` copies the visible terminal pane, `/` searches, `$` opens cost tracking,
+and `?` shows the in-app help.
 
 ## Configuration and data
 
