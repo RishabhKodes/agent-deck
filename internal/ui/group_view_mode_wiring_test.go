@@ -46,25 +46,6 @@ func setOnlySessionRunning(t *testing.T, h *Home, title string) {
 	}
 }
 
-func addRemoteFixture(h *Home) {
-	h.remoteSessionsMu.Lock()
-	defer h.remoteSessionsMu.Unlock()
-	h.remoteSessions = map[string][]session.RemoteSessionInfo{
-		"dev": {
-			{ID: "remote-1", Title: "remote one", RemoteName: "dev", Status: string(session.StatusRunning)},
-		},
-	}
-}
-
-func remoteSessionIndexByID(h *Home, id string) int {
-	for i, it := range h.flatItems {
-		if it.Type == session.ItemTypeRemoteSession && it.RemoteSession != nil && it.RemoteSession.ID == id {
-			return i
-		}
-	}
-	return -1
-}
-
 func TestActiveTopWiringSplitsList(t *testing.T) {
 	home, _ := buildTwoGroupHome(t)
 
@@ -285,23 +266,26 @@ func TestSkipDividerNavigationGlidesPast(t *testing.T) {
 	}
 }
 
-func TestCycleGroupViewPreservesRemoteSessionSelection(t *testing.T) {
+func TestCycleGroupViewKeepsLegacyRemoteRecordsInert(t *testing.T) {
 	home, _ := buildTwoGroupHome(t)
 	setOnlySessionRunning(t, home, "a1")
-	addRemoteFixture(home)
+	home.remoteSessions = map[string][]session.RemoteSessionInfo{
+		"dev": {{ID: "remote-1", Title: "remote one", RemoteName: "dev", Status: string(session.StatusRunning)}},
+	}
 	home.rebuildFlatItems()
 
-	remoteIdx := remoteSessionIndexByID(home, "remote-1")
-	if remoteIdx < 0 {
-		t.Fatalf("remote session missing before cycle; flatItems=%v", len(home.flatItems))
+	assertNoRemoteRows := func(stage string) {
+		t.Helper()
+		for _, item := range home.flatItems {
+			if item.Type == session.ItemTypeRemoteSession {
+				t.Fatalf("legacy remote record became visible %s", stage)
+			}
+		}
 	}
-	home.cursor = remoteIdx
+	assertNoRemoteRows("before view-mode cycle")
 
 	home.handleMainKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
-
-	if got := remoteSessionIndexByID(home, "remote-1"); got < 0 || home.cursor != got {
-		t.Fatalf("remote selection not preserved after view-mode cycle: cursor=%d remoteIdx=%d", home.cursor, got)
-	}
+	assertNoRemoteRows("after view-mode cycle")
 }
 
 func TestMouseWheelSkipsDividerRows(t *testing.T) {

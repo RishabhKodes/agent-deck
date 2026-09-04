@@ -29,9 +29,7 @@ func TestOperationalToolchainPinsMatchGoMod(t *testing.T) {
 		".flox/env/manifest.lock",
 		"scripts/verify-preview-ansi-bleed.sh",
 		"scripts/verify-watcher-framework.sh",
-		"tests/web/helpers/global-setup.js",
 		"tests/eval/README.md",
-		"tests/lighthouse/README.md",
 		"docs/perf-budget-suite.md",
 	}
 

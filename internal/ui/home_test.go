@@ -1728,58 +1728,32 @@ func TestRenderRemotePreviewShowsEmptyStateAfterFetch(t *testing.T) {
 	}
 }
 
-func TestRenderRemotePreviewTruncatesCachedResponseLines(t *testing.T) {
-	home := NewHome()
-	home.width = 100
-	home.height = 30
-
-	remote := session.RemoteSessionInfo{
-		ID:     "remote-123",
-		Title:  "remote-session",
-		Status: "running",
-		Path:   "/srv/project",
-	}
-	item := session.Item{Type: session.ItemTypeRemoteSession, RemoteSession: &remote, RemoteName: "myserver"}
-
+func TestTruncateRemotePreviewContentLimitsLines(t *testing.T) {
 	lines := make([]string, 250)
 	for i := range lines {
 		lines[i] = fmt.Sprintf("line-%03d", i)
 	}
-	home.previewCache[remotePreviewCacheKey("myserver", "remote-123")] = strings.Join(lines, "\n")
 
-	rendered := home.renderRemotePreview(item, 80, 20)
-	if strings.Contains(rendered, "line-049") {
-		t.Fatalf("rendered preview should drop lines outside the retained tail, got: %q", rendered)
+	truncated := truncateRemotePreviewContent(strings.Join(lines, "\n"))
+	if strings.Contains(truncated, "line-049") {
+		t.Fatalf("truncated preview should drop lines outside the retained tail, got: %q", truncated)
 	}
-	if !strings.Contains(rendered, "line-050") || !strings.Contains(rendered, "line-249") {
-		t.Fatalf("rendered preview should retain the last 200 lines, got: %q", rendered)
+	if !strings.Contains(truncated, "line-050") || !strings.Contains(truncated, "line-249") {
+		t.Fatalf("truncated preview should retain the last 200 lines, got: %q", truncated)
 	}
 }
 
-func TestRenderRemotePreviewTruncatesCachedResponseBytes(t *testing.T) {
-	home := NewHome()
-	home.width = 100
-	home.height = 30
-
-	remote := session.RemoteSessionInfo{
-		ID:     "remote-123",
-		Title:  "remote-session",
-		Status: "running",
-		Path:   "/srv/project",
-	}
-	item := session.Item{Type: session.ItemTypeRemoteSession, RemoteSession: &remote, RemoteName: "myserver"}
-
+func TestTruncateRemotePreviewContentLimitsBytes(t *testing.T) {
 	prefix := "TRUNCATE-ME"
 	tail := "KEEP-TAIL"
 	content := prefix + strings.Repeat("x", 20*1024) + tail
-	home.previewCache[remotePreviewCacheKey("myserver", "remote-123")] = content
 
-	rendered := home.renderRemotePreview(item, 80, 20)
-	if strings.Contains(rendered, prefix) {
-		t.Fatalf("rendered preview should drop content beyond the byte cap, got: %q", rendered)
+	truncated := truncateRemotePreviewContent(content)
+	if strings.Contains(truncated, prefix) {
+		t.Fatalf("truncated preview should drop content beyond the byte cap, got: %q", truncated)
 	}
-	if !strings.Contains(rendered, tail) {
-		t.Fatalf("rendered preview should keep the most recent content, got: %q", rendered)
+	if !strings.Contains(truncated, tail) {
+		t.Fatalf("truncated preview should keep the most recent content, got: %q", truncated)
 	}
 }
 
@@ -2690,8 +2664,8 @@ func TestMouseYToItemIndex(t *testing.T) {
 		{"click on third item", 6, 0, 2, false},
 		{"click above list", 3, 0, -1, false},
 		{"click way below items", 20, 0, -1, false},
-		{"with banners first item", 6, 0, 0, true},
-		{"with banners second item", 7, 0, 1, true},
+		{"with maintenance banner first item", 5, 0, 0, true},
+		{"with maintenance banner second item", 6, 0, 1, true},
 		{"scrolled down click first visible", 5, 1, 1, false}, // line 4 = "more above", line 5 = first item
 		{"scrolled down click more-above indicator", 4, 1, -1, false},
 	}

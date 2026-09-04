@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// CLI subprocess tests for issue #928: `session move --to-profile`,
-// `group move --to-profile`, and `conductor move --to-profile`.
+// CLI subprocess tests for issue #928: `session move --to-profile` and
+// `group move --to-profile`.
 //
 // These complement the unit tests in internal/session/profile_migrate_test.go
 // by exercising the actual binary, argv parsing, and JSON output shape.
@@ -267,23 +267,5 @@ func TestSessionMoveToProfile_RejectsIncompatibleFlags(t *testing.T) {
 				t.Errorf("error should mention incompatibility; got stdout=%s stderr=%s", stdout, stderr)
 			}
 		})
-	}
-}
-
-func TestConductorMoveToProfile_RequiresToProfile(t *testing.T) {
-	if testing.Short() {
-		t.Skip("subprocess CLI test skipped in short mode")
-	}
-	home := t.TempDir()
-	bootstrapProfile(t, home, "src")
-
-	_, stderr, code := runAgentDeck(t, home,
-		"-p", "src", "conductor", "move", "alpha",
-	)
-	if code == 0 {
-		t.Fatal("expected non-zero exit when --to-profile is missing")
-	}
-	if !strings.Contains(strings.ToLower(stderr), "to-profile") {
-		t.Errorf("stderr should mention --to-profile; got %s", stderr)
 	}
 }

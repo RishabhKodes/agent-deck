@@ -201,17 +201,11 @@ func TestIssue1753_SyncedMsgRebuildsRowsWithoutTmux(t *testing.T) {
 	}
 }
 
-// TestIssue1753_RemoteSessionsUnaffected covers the RemoteSession side of the
-// attach-return paths this PR touches.
-//
-//   - Remote attach (attachRemoteSession) returns statusUpdateMsg with an EMPTY
-//     attachedSessionID, so it schedules no reconcile — exactly as the inline
-//     refreshAttachedSessionStatus("") it replaced returned immediately. Pinning that
-//     keeps a future edit from firing a local-tmux reconcile for a remote session.
-//   - The extra rebuild introduced by attachReturnSyncedMsg must keep a selected
-//     remote row selected, since remote items are appended to flatItems from
-//     h.remoteSessions on every rebuild.
-func TestIssue1753_RemoteSessionsUnaffected(t *testing.T) {
+// TestIssue1753_LegacyRemoteRecordsRemainInert pins the local-only dashboard
+// contract while retaining the attach-return regression check: an empty
+// attachedSessionID schedules no local tmux reconciliation, and legacy remote
+// records loaded from old state never reappear as selectable rows.
+func TestIssue1753_LegacyRemoteRecordsRemainInert(t *testing.T) {
 	h, _ := homeWithInstances(t, 4)
 	h.remoteSessions = map[string][]session.RemoteSessionInfo{
 		"box": {
@@ -221,41 +215,23 @@ func TestIssue1753_RemoteSessionsUnaffected(t *testing.T) {
 	}
 	h.rebuildFlatItems()
 
-	target := -1
-	for i, it := range h.flatItems {
-		if it.Type == session.ItemTypeRemoteSession && it.RemoteSession != nil && it.RemoteSession.ID == "r2" {
-			target = i
-			break
+	assertNoRemoteRows := func(stage string) {
+		t.Helper()
+		for _, item := range h.flatItems {
+			if item.Type == session.ItemTypeRemoteSession {
+				t.Fatalf("legacy remote record became visible %s", stage)
+			}
 		}
 	}
-	if target < 0 {
-		t.Fatal("precondition: remote session row r2 not present in flatItems")
-	}
-	h.cursor = target
+	assertNoRemoteRows("before attach return")
 
-	// A remote attach return carries no session ID: no local reconcile may be scheduled.
 	if _, cmd := h.Update(statusUpdateMsg{}); yieldsMsg(cmd, "ui.attachReturnSyncedMsg") {
-		t.Error("remote attach return scheduled a local-tmux reconcile; statusUpdateMsg with " +
+		t.Error("empty attach return scheduled a local-tmux reconcile; statusUpdateMsg with " +
 			"no attachedSessionID must schedule none (#1753)")
 	}
 
-	// Re-select r2 (the handler above rebuilt the list) and check the new
-	// attachReturnSyncedMsg rebuild preserves a remote selection.
-	for i, it := range h.flatItems {
-		if it.Type == session.ItemTypeRemoteSession && it.RemoteSession != nil && it.RemoteSession.ID == "r2" {
-			h.cursor = i
-			break
-		}
-	}
 	_, _ = h.Update(attachReturnSyncedMsg{})
-
-	if h.cursor < 0 || h.cursor >= len(h.flatItems) {
-		t.Fatalf("cursor %d out of range after rebuild (%d items)", h.cursor, len(h.flatItems))
-	}
-	got := h.flatItems[h.cursor]
-	if got.Type != session.ItemTypeRemoteSession || got.RemoteSession == nil || got.RemoteSession.ID != "r2" {
-		t.Fatalf("attachReturnSyncedMsg rebuild lost the remote selection: cursor now on %v (#1753)", got.Type)
-	}
+	assertNoRemoteRows("after attach return")
 }
 
 // TestIssue1753_AttachReturnUpdateStaysUnderBudget is the wall-clock budget guard

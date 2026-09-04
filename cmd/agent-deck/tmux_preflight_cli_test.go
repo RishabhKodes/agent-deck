@@ -17,18 +17,6 @@ func TestSparsePathPreflightHonorsParsedCommandBehavior(t *testing.T) {
 		fallback   bool
 	}{
 		{
-			name:       "web help does not require tmux",
-			args:       []string{"web", "--help"},
-			wantExit:   0,
-			wantOutput: "Usage: agent-deck web [options]",
-		},
-		{
-			name:       "web help token is parsed as a token value",
-			args:       []string{"web", "--token", "--help", "--no-tui"},
-			wantExit:   1,
-			wantOutput: "Error: tmux not found",
-		},
-		{
 			name:       "launch help does not require tmux",
 			args:       []string{"launch", "--help"},
 			wantExit:   0,
@@ -43,12 +31,6 @@ func TestSparsePathPreflightHonorsParsedCommandBehavior(t *testing.T) {
 		{
 			name:       "try no-session token is parsed as a command value",
 			args:       []string{"try", "--cmd", "--no-session", "demo"},
-			wantExit:   1,
-			wantOutput: "Error: tmux not found",
-		},
-		{
-			name:       "run-task help token is parsed as a title value",
-			args:       []string{"run-task", "--child", "abc", "--title", "--help", "--", "true"},
 			wantExit:   1,
 			wantOutput: "Error: tmux not found",
 		},
