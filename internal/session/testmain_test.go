@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -294,9 +295,31 @@ func bootstrapTmuxServer() func() {
 		fmt.Fprintf(os.Stderr, "bootstrapTmuxServer: new-session failed: %v (%s)\n", err, strings.TrimSpace(string(out)))
 		return func() {}
 	}
+	serverProcess := bootstrapTmuxServerProcess(tmuxTmpdir)
 	return func() {
-		_ = bootstrapTmuxCommand(tmuxTmpdir, "kill-server").Run()
+		if err := bootstrapTmuxCommand(tmuxTmpdir, "kill-server").Run(); err != nil && serverProcess != nil {
+			// Some sandbox profiles allow the server to create its socket but
+			// deny a later client connection to that path. The exact server PID
+			// captured at startup is a deterministic cleanup fallback.
+			_ = serverProcess.Kill()
+		}
 	}
+}
+
+func bootstrapTmuxServerProcess(tmuxTmpdir string) *os.Process {
+	out, err := bootstrapTmuxCommand(tmuxTmpdir, "display-message", "-p", "#{pid}").Output()
+	if err != nil {
+		return nil
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil || pid <= 0 {
+		return nil
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return nil
+	}
+	return process
 }
 
 func bootstrapTmuxCommand(tmuxTmpdir string, args ...string) *exec.Cmd {

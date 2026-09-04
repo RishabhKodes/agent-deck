@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -184,9 +185,28 @@ func bootstrapTmuxServer() func() {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	serverProcess := bootstrapTmuxServerProcess(tmuxTmpdir)
 	return func() {
-		_ = bootstrapTmuxCommand(tmuxTmpdir, "kill-server").Run()
+		if err := bootstrapTmuxCommand(tmuxTmpdir, "kill-server").Run(); err != nil && serverProcess != nil {
+			_ = serverProcess.Kill()
+		}
 	}
+}
+
+func bootstrapTmuxServerProcess(tmuxTmpdir string) *os.Process {
+	out, err := bootstrapTmuxCommand(tmuxTmpdir, "display-message", "-p", "#{pid}").Output()
+	if err != nil {
+		return nil
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil || pid <= 0 {
+		return nil
+	}
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return nil
+	}
+	return process
 }
 
 func bootstrapTmuxCommand(tmuxTmpdir string, args ...string) *exec.Cmd {
