@@ -20,6 +20,7 @@ func TestProjectSkillsDirMapping(t *testing.T) {
 		{tool: "claude", wantDir: ".claude/skills", wantOK: true, wantRestart: true},
 		{tool: "gemini", wantDir: ".agents/skills", wantOK: true, wantRestart: true},
 		{tool: "codex", wantDir: ".agents/skills", wantOK: true, wantRestart: true},
+		{tool: "cursor", wantDir: ".cursor/skills", wantOK: true, wantRestart: true},
 		{tool: "pi", wantDir: ".agents/skills", wantOK: true, wantRestart: false},
 		{tool: "shell", wantDir: "", wantOK: false, wantRestart: false},
 	}
