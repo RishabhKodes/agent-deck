@@ -204,6 +204,12 @@ func paneGoneWithin(inst *Instance, window time.Duration) bool {
 }
 
 func TestMain(m *testing.M) {
+	// The #2007 crash helper deliberately SIGKILLs this test binary to verify
+	// atomic inbox writes. It must stay side-effect free before m.Run: anything
+	// started here cannot execute deferred cleanup after that intentional kill.
+	if os.Getenv(issue2007CrashHelperEnv) == "1" {
+		os.Exit(m.Run())
+	}
 	os.Exit(runTestMain(m))
 }
 
