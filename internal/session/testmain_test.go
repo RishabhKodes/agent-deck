@@ -284,14 +284,37 @@ func bootstrapTmuxServer() func() {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		return func() {}
 	}
-	cmd := exec.Command("tmux", "new-session", "-d", "-s", bootstrapSessionName, "sh", "-c", "sleep 3600")
+	// Pin both startup and cleanup to the directory that TestMain isolated.
+	// Tests mutate process-wide TMUX_TMPDIR in order to exercise env handling;
+	// relying on its ambient value at deferred-cleanup time can target the wrong
+	// socket and leave this server (and its pty) behind.
+	tmuxTmpdir := os.Getenv("TMUX_TMPDIR")
+	cmd := bootstrapTmuxCommand(tmuxTmpdir, "new-session", "-d", "-s", bootstrapSessionName, "sh", "-c", "sleep 3600")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "bootstrapTmuxServer: new-session failed: %v (%s)\n", err, strings.TrimSpace(string(out)))
 		return func() {}
 	}
 	return func() {
-		_ = exec.Command("tmux", "kill-server").Run()
+		_ = bootstrapTmuxCommand(tmuxTmpdir, "kill-server").Run()
 	}
+}
+
+func bootstrapTmuxCommand(tmuxTmpdir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("tmux", args...)
+	cmd.Env = tmuxBootstrapEnv(tmuxTmpdir)
+	return cmd
+}
+
+func tmuxBootstrapEnv(tmuxTmpdir string) []string {
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, "TMUX=") || strings.HasPrefix(entry, "TMUX_PANE=") ||
+			strings.HasPrefix(entry, "TMUX_TMPDIR=") {
+			continue
+		}
+		env = append(env, entry)
+	}
+	return append(env, "TMUX_TMPDIR="+tmuxTmpdir)
 }
 
 // TestTmuxBootstrap_ServerIsRunning pins that TestMain started a tmux server

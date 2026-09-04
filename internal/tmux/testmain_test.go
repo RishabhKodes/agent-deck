@@ -164,8 +164,9 @@ func bootstrapTmuxServer() func() {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		return func() {}
 	}
+	tmuxTmpdir := os.Getenv("TMUX_TMPDIR")
 	start := func() bool {
-		cmd := exec.Command("tmux", "new-session", "-d", "-s", bootstrapSessionName, "sh", "-c", "sleep 3600")
+		cmd := bootstrapTmuxCommand(tmuxTmpdir, "new-session", "-d", "-s", bootstrapSessionName, "sh", "-c", "sleep 3600")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			fmt.Fprintf(os.Stderr, "bootstrapTmuxServer(tmux): new-session failed: %v (%s)\n", err, strings.TrimSpace(string(out)))
 			return false
@@ -175,7 +176,7 @@ func bootstrapTmuxServer() func() {
 	ok := start()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		if err := exec.Command("tmux", "has-session", "-t", bootstrapSessionName).Run(); err == nil {
+		if err := bootstrapTmuxCommand(tmuxTmpdir, "has-session", "-t", bootstrapSessionName).Run(); err == nil {
 			break
 		}
 		if !ok {
@@ -184,8 +185,22 @@ func bootstrapTmuxServer() func() {
 		time.Sleep(50 * time.Millisecond)
 	}
 	return func() {
-		_ = exec.Command("tmux", "kill-server").Run()
+		_ = bootstrapTmuxCommand(tmuxTmpdir, "kill-server").Run()
 	}
+}
+
+func bootstrapTmuxCommand(tmuxTmpdir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("tmux", args...)
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, "TMUX=") || strings.HasPrefix(entry, "TMUX_PANE=") ||
+			strings.HasPrefix(entry, "TMUX_TMPDIR=") {
+			continue
+		}
+		env = append(env, entry)
+	}
+	cmd.Env = append(env, "TMUX_TMPDIR="+tmuxTmpdir)
+	return cmd
 }
 
 // TestTmuxBootstrap_ServerIsRunning pins that TestMain's bootstrap ran and
