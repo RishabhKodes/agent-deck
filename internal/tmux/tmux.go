@@ -3679,6 +3679,50 @@ func (s *Session) CapturePaneFresh() (string, error) {
 	return content, nil
 }
 
+// CapturePaneFrame returns the current visible terminal grid together with the
+// pane cursor. windowIndex < 0 targets the active window; non-negative values
+// target that tmux window explicitly. Unlike CapturePane, this deliberately
+// bypasses the scrollback cache because it drives an interactive live view.
+func (s *Session) CapturePaneFrame(windowIndex int) (PaneFrame, error) {
+	target := s.Name
+	if windowIndex >= 0 {
+		target = s.windowTarget(windowIndex)
+	}
+
+	if pm := GetPipeManager(); pm != nil {
+		if frame, err := pm.CapturePaneFrame(s.Name, target); err == nil {
+			return frame, nil
+		}
+		s.recordPipeDegraded()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	content, err := s.tmuxCmdContext(ctx, "capture-pane", "-t", target, "-p", "-e").Output()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return PaneFrame{}, ErrCaptureTimeout
+		}
+		return PaneFrame{}, fmt.Errorf("failed to capture pane frame: %w", err)
+	}
+	cursorRaw, err := s.tmuxCmdContext(
+		ctx,
+		"display-message", "-t", target, "-p",
+		"#{cursor_x}|#{cursor_y}|#{cursor_flag}",
+	).Output()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return PaneFrame{}, ErrCaptureTimeout
+		}
+		return PaneFrame{}, fmt.Errorf("failed to capture pane cursor: %w", err)
+	}
+	cursor, err := parsePaneCursor(string(cursorRaw))
+	if err != nil {
+		return PaneFrame{}, err
+	}
+	return PaneFrame{Content: string(content), Cursor: cursor}, nil
+}
+
 // CaptureFullHistory captures the scrollback history (limited to last 2000 lines for performance)
 func (s *Session) CaptureFullHistory() (string, error) {
 	// Limit to last 2000 lines to balance content availability with memory usage

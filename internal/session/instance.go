@@ -7034,6 +7034,22 @@ func (i *Instance) PreviewWindowFull(windowIndex int) (string, error) {
 	return i.tmuxSession.CaptureWindowFullHistory(windowIndex)
 }
 
+// PreviewFrame returns the live visible grid and cursor for the instance's
+// active window, or for windowIndex when it is non-negative.
+func (i *Instance) PreviewFrame(windowIndex int) (tmux.PaneFrame, error) {
+	if i.tmuxSession == nil {
+		return tmux.PaneFrame{}, fmt.Errorf("tmux session not initialized")
+	}
+	frame, err := i.tmuxSession.CapturePaneFrame(windowIndex)
+	if err != nil {
+		if fallback := i.spawnFailurePreview(); fallback != "" {
+			return tmux.PaneFrame{Content: fallback}, nil
+		}
+		return tmux.PaneFrame{}, err
+	}
+	return frame, nil
+}
+
 // HasUpdated checks if there's new output since last check
 func (i *Instance) HasUpdated() bool {
 	if i.tmuxSession == nil {

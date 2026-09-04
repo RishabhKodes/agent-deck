@@ -195,6 +195,20 @@ func (pm *PipeManager) CapturePane(sessionName string) (string, error) {
 	return pipe.CapturePaneVia()
 }
 
+// CapturePaneFrame captures the current grid and cursor for target through the
+// session's persistent control pipe. target may be a session name or a
+// session:window target.
+func (pm *PipeManager) CapturePaneFrame(sessionName, target string) (PaneFrame, error) {
+	pm.mu.RLock()
+	pipe := pm.pipes[sessionName]
+	pm.mu.RUnlock()
+
+	if pipe == nil || !pipe.IsAlive() {
+		return PaneFrame{}, fmt.Errorf("no pipe for session %s", sessionName)
+	}
+	return pipe.CapturePaneFrameVia(target)
+}
+
 // SetClientSize makes the selected session's control client represent the
 // dashboard Output pane's actual geometry. If the pipe is still connecting,
 // the desired size is retained and applied by Connect. This is intentionally
