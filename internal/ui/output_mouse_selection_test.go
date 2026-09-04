@@ -23,20 +23,22 @@ func commandContainsMessageType(cmd tea.Cmd, want tea.Msg) bool {
 	return fmt.Sprintf("%T", msg) == fmt.Sprintf("%T", want)
 }
 
-func TestOutputInteractionNeverDisablesDashboardMouse(t *testing.T) {
+func TestOutputInteractionEnablesMouseForWheelScrolling(t *testing.T) {
 	for _, tool := range []string{"claude", "codex", "gemini", "opencode", "shell"} {
 		t.Run(tool, func(t *testing.T) {
-			h := NewHome()
-			h.insertMode = true
-			_, cmd := h.Update(struct{ tool string }{tool: tool})
-			if commandContainsMessageType(cmd, tea.DisableMouse()) {
-				t.Fatalf("%s Output disabled mouse reporting and made wheel scrolling unreachable", tool)
+			h, _, _ := armHomeWithOneWindowRow(t, tool, 0)
+			h.insertOpenKeySender = func(insertTargetRef) (insertKeySender, error) {
+				return &fakeInsertKeySender{}, nil
+			}
+			_, cmd := h.activateSelectedInPlace()
+			if !commandContainsMessageType(cmd, tea.EnableMouseCellMotion()) {
+				t.Fatalf("%s Output did not enable mouse reporting for wheel scrolling", tool)
 			}
 		})
 	}
 }
 
-func TestOutputActivationKeepsWheelReportingEnabled(t *testing.T) {
+func TestOutputActivationStartsWithWheelScrollingMode(t *testing.T) {
 	h, _, _ := armHomeWithOneWindowRow(t, "claude", 0)
 	h.insertOpenKeySender = func(insertTargetRef) (insertKeySender, error) {
 		return &fakeInsertKeySender{}, nil
@@ -52,17 +54,19 @@ func TestOutputActivationKeepsWheelReportingEnabled(t *testing.T) {
 		t.Fatalf("activating Output returned %T, want a command batch", msg)
 	}
 	if got := batch[0](); fmt.Sprintf("%T", got) != fmt.Sprintf("%T", tea.EnableMouseCellMotion()) {
-		t.Fatalf("activating Output started with %T, want EnableMouseCellMotion so wheel events remain reachable", got)
+		t.Fatalf("activating Output started with %T, want EnableMouseCellMotion for wheel scrolling", got)
 	}
 }
 
-func TestExternalScreenReturnRestoresMouseDuringOutput(t *testing.T) {
-	for _, active := range []bool{false, true} {
-		h := NewHome()
-		h.insertMode = active
-		cmd := h.restoreMouseModeAfterExternalScreenCmd()
-		if !commandContainsMessageType(cmd, tea.EnableMouseCellMotion()) {
-			t.Fatalf("insertMode=%v: external-screen return did not restore mouse reporting", active)
-		}
+func TestExternalScreenReturnRestoresStateAppropriateMouseMode(t *testing.T) {
+	h := NewHome()
+	if cmd := h.restoreMouseModeAfterExternalScreenCmd(); !commandContainsMessageType(cmd, tea.EnableMouseCellMotion()) {
+		t.Fatal("navigation mode did not restore dashboard mouse reporting")
 	}
+
+	h.insertMode = true
+	if cmd := h.restoreMouseModeAfterExternalScreenCmd(); !commandContainsMessageType(cmd, tea.EnableMouseCellMotion()) {
+		t.Fatal("Output mode did not restore wheel-scrolling mouse reporting")
+	}
+
 }

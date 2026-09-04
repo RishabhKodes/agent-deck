@@ -73,6 +73,21 @@ func TestAnalyticsPanel_View_Empty(t *testing.T) {
 	}
 }
 
+func TestAnalyticsPanel_View_WithCodexContext(t *testing.T) {
+	panel := NewAnalyticsPanel()
+	panel.SetCodexAnalytics(&session.CodexSessionAnalytics{
+		CurrentContextTokens: 62_000,
+		ContextWindow:        212_000,
+		TotalTokens:          500_000,
+	})
+	panel.SetSize(60, 20)
+
+	view := panel.View()
+	if !strings.Contains(view, "Context") || !strings.Contains(view, "25.0%") {
+		t.Fatalf("Codex analytics missing context bar: %q", view)
+	}
+}
+
 func TestAnalyticsPanel_View_WithAnalytics(t *testing.T) {
 	panel := NewAnalyticsPanel()
 

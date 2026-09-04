@@ -80,7 +80,7 @@ func (d *SkillDialog) Show(projectPath, sessionID, tool string) error {
 		d.visible = true
 		d.attached = nil
 		d.available = nil
-		d.emptyHelpText = "Skills manager is available for Claude, Gemini, Codex, and Pi sessions."
+		d.emptyHelpText = "Skills manager is available for Claude, Cursor, Gemini, Codex, and Pi sessions."
 		return nil
 	}
 

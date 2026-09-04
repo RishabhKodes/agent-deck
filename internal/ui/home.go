@@ -267,12 +267,21 @@ type Home struct {
 	// Analytics cache (async fetching with TTL)
 	currentAnalytics       *session.SessionAnalytics                  // Current analytics for selected session (Claude)
 	currentGeminiAnalytics *session.GeminiSessionAnalytics            // Current analytics for selected session (Gemini)
+	currentCodexAnalytics  *session.CodexSessionAnalytics             // Current analytics for selected session (Codex)
 	analyticsSessionID     string                                     // Session ID for current analytics
 	analyticsFetchingID    string                                     // ID currently being fetched (prevents duplicates)
 	analyticsCacheMu       sync.RWMutex                               // Protects analytics cache maps across UI + background workers
 	analyticsCache         map[string]*session.SessionAnalytics       // TTL cache: sessionID -> analytics (Claude)
 	geminiAnalyticsCache   map[string]*session.GeminiSessionAnalytics // TTL cache: sessionID -> analytics (Gemini)
+	codexAnalyticsCache    map[string]*session.CodexSessionAnalytics  // TTL cache: sessionID -> analytics (Codex)
 	analyticsCacheTime     map[string]time.Time                       // TTL cache: sessionID -> cache timestamp
+
+	// Provider-scoped local tools and skills. These are read asynchronously so
+	// preview rendering never walks config or skill directories.
+	capabilitiesCache     map[string]session.LocalAgentCapabilities
+	capabilitiesCacheTime map[string]time.Time
+	capabilitiesFetching  map[string]bool
+	capabilitiesMu        sync.RWMutex
 
 	// State
 	cursor                   int                   // Selected item index in flatItems
@@ -605,6 +614,31 @@ type Home struct {
 	// commands. Toggled with `I` (enter) and `Esc` (exit).
 	insertMode          bool
 	insertModeSessionID string
+	// Shift-drag selection is owned by Agent Deck while mouse reporting remains
+	// enabled, so wheel scrolling and text selection work without a mode toggle.
+	outputSelection outputTextSelection
+	// outputActivationPending is set by enterInsertMode and consumed by the
+	// Bubble Tea update wrapper (or a direct activation helper in tests).
+	outputActivationPending bool
+	caretVisible            bool
+	caretBlinkGeneration    uint64
+
+	// Live terminal frame state. previewCache remains the scrollback/history
+	// source; this frame is the current tmux cell grid and cursor used at the
+	// live tail while Output is active.
+	activeTerminalFrame         tmux.PaneFrame
+	activeTerminalFrameKey      string
+	activeTerminalFrameValid    bool
+	activeTerminalFrameFetching bool
+	activeTerminalFrameDirty    bool
+
+	// PipeManager receives tmux output on background goroutines. main wires a
+	// Bubble Tea sender after creating Program so those events can request a
+	// frame immediately instead of waiting for the two-second status tick.
+	messageSenderMu      sync.RWMutex
+	messageSender        func(tea.Msg)
+	terminalOutputQueued sync.Map
+	activeTerminalTmux   atomic.Value // string: only this tmux session may enqueue live-frame messages
 	// insertKeySink is an optional override used by tests to capture keys
 	// without running real tmux. When nil, keys are sent via the session's
 	// tmux pane (SendKeys / SendEnter).
@@ -626,13 +660,13 @@ type Home struct {
 	// insert target. Defaulted to the production opener at construction
 	// time; tests override to inject a mock without real tmux/SSH.
 	insertOpenKeySender func(target insertTargetRef) (insertKeySender, error)
-	// codexPreviewGeometry is the last Output-pane size published to the
-	// focused Codex session's tmux control client. It suppresses a
+	// focusedPreviewGeometry is the last Output-pane size published to the
+	// focused agent session's tmux control client. It suppresses a
 	// refresh-client round trip on every keystroke while still re-publishing
 	// after focus or terminal-size changes.
-	codexPreviewGeometrySession string
-	codexPreviewGeometryCols    int
-	codexPreviewGeometryRows    int
+	focusedPreviewGeometrySession string
+	focusedPreviewGeometryCols    int
+	focusedPreviewGeometryRows    int
 
 	// Insert-mode keystroke batching (#1094). Per-keystroke tmux send-keys
 	// invocations are too slow when typing fast. Runes are accumulated in
@@ -1105,7 +1139,28 @@ type analyticsFetchedMsg struct {
 	sessionID       string
 	analytics       *session.SessionAnalytics
 	geminiAnalytics *session.GeminiSessionAnalytics
+	codexAnalytics  *session.CodexSessionAnalytics
 	err             error
+}
+
+type capabilitiesFetchedMsg struct {
+	sessionID    string
+	capabilities session.LocalAgentCapabilities
+}
+
+type terminalOutputMsg struct {
+	sessionName string
+}
+
+type activeTerminalFrameFetchedMsg struct {
+	previewKey string
+	generation uint64
+	frame      tmux.PaneFrame
+	err        error
+}
+
+type caretBlinkMsg struct {
+	generation uint64
 }
 
 // MaintenanceCompleteMsg is the exported type for sending from main.go via p.Send()
@@ -1193,6 +1248,16 @@ func NewHomeWithProfile(profile string) *Home {
 // TestMain disables eager workers for unit tests. Production keeps the default
 // so status, log, pipe, and storage updates continue while the TUI is running.
 var homeBackgroundWorkersEnabled = true
+
+// DisableHomeBackgroundWorkersForTests prevents constructors called from a
+// different package's test binary from starting production goroutines. Package
+// TestMain should call the returned restore function after m.Run. UI's own
+// tests can set the package variable directly, but importing packages cannot.
+func DisableHomeBackgroundWorkersForTests() func() {
+	previous := homeBackgroundWorkersEnabled
+	homeBackgroundWorkersEnabled = false
+	return func() { homeBackgroundWorkersEnabled = previous }
+}
 
 // shouldAutoInstallCursorHooks reports whether TUI startup should run the
 // Cursor hook auto-install/watcher-start block in NewHomeWithProfileAndMode:
@@ -1290,7 +1355,11 @@ func NewHomeWithProfileAndMode(profile string) *Home {
 		previewCacheTime:          make(map[string]time.Time),
 		analyticsCache:            make(map[string]*session.SessionAnalytics),
 		geminiAnalyticsCache:      make(map[string]*session.GeminiSessionAnalytics),
+		codexAnalyticsCache:       make(map[string]*session.CodexSessionAnalytics),
 		analyticsCacheTime:        make(map[string]time.Time),
+		capabilitiesCache:         make(map[string]session.LocalAgentCapabilities),
+		capabilitiesCacheTime:     make(map[string]time.Time),
+		capabilitiesFetching:      make(map[string]bool),
 		clearOnCompactSent:        make(map[string]time.Time),
 		launchingSessions:         make(map[string]time.Time),
 		resumingSessions:          make(map[string]time.Time),
@@ -1402,6 +1471,7 @@ func NewHomeWithProfileAndMode(profile string) *Home {
 		// Initialize event-driven status detection. The output callback is invoked
 		// when PipeManager detects output from a session.
 		outputCallback := func(sessionName string) {
+			h.queueTerminalOutput(sessionName)
 			h.instancesMu.RLock()
 			for _, inst := range h.instances {
 				if inst.GetTmuxSession() != nil && inst.GetTmuxSession().Name == sessionName {
@@ -2907,10 +2977,21 @@ func (h *Home) pruneAnalyticsCache() {
 		if now.Sub(t) > maxAge {
 			delete(h.analyticsCache, id)
 			delete(h.geminiAnalyticsCache, id)
+			delete(h.codexAnalyticsCache, id)
 			delete(h.analyticsCacheTime, id)
 		}
 	}
 	h.analyticsCacheMu.Unlock()
+
+	h.capabilitiesMu.Lock()
+	for id, t := range h.capabilitiesCacheTime {
+		if now.Sub(t) > maxAge {
+			delete(h.capabilitiesCache, id)
+			delete(h.capabilitiesCacheTime, id)
+			delete(h.capabilitiesFetching, id)
+		}
+	}
+	h.capabilitiesMu.Unlock()
 
 	h.logActivityMu.Lock()
 	for id, t := range h.lastLogActivity {
@@ -3319,6 +3400,21 @@ func (h *Home) fetchAnalytics(inst *session.Instance) tea.Cmd {
 	sessionID := inst.ID
 
 	fetchTool := inst.GetToolThreadSafe()
+	if session.IsCodexCompatible(fetchTool) {
+		return func() tea.Msg {
+			analytics, err := inst.GetCodexAnalytics()
+			if err != nil {
+				uiLog.Debug("codex_analytics_parse_failed",
+					slog.String("session_id", sessionID),
+					slog.String("error", err.Error()))
+			}
+			return analyticsFetchedMsg{
+				sessionID:      sessionID,
+				codexAnalytics: analytics,
+				err:            err,
+			}
+		}
+	}
 	switch fetchTool {
 	case "claude":
 		claudeSessionID := inst.ClaudeSessionID
@@ -4642,11 +4738,15 @@ func (h *Home) processStatusUpdate(req statusUpdateRequest) {
 // is a pass-through — no regression for users who never opt in.
 func (h *Home) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer h.recordFocusedSession()
+	wasInsertMode := h.insertMode
 	model, cmd := h.updateInner(msg)
 	// A captured TUI is only faithful when the producer and consumer agree on
-	// geometry. Publish the focused Codex Output pane size after updateInner so
+	// geometry. Publish the focused agent Output pane size after updateInner so
 	// this sees both newly-entered insert mode and the latest WindowSizeMsg.
-	cmd = tea.Batch(cmd, h.syncFocusedCodexGeometryCmd())
+	cmd = tea.Batch(cmd, h.consumeOutputActivationCmd(), h.syncFocusedAgentGeometryCmd())
+	if wasInsertMode && !h.insertMode {
+		cmd = tea.Batch(cmd, tea.EnableMouseCellMotion)
+	}
 	if !h.fullRepaint {
 		return model, cmd
 	}
@@ -4701,6 +4801,9 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return h, h.fetchSelectedPreview()
 
 	case tea.MouseMsg:
+		if handled, cmd := h.handleOutputShiftSelection(msg); handled {
+			return h, cmd
+		}
 		// Route mouse wheel events to the active scrollable area.
 		// Priority: setup wizard > settings > help > global search > MCP dialog > new/fork dialogs > main list.
 		// Non-wheel events are silently ignored (O(1), no blocking I/O).
@@ -5312,8 +5415,14 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		h.analyticsCacheMu.Lock()
 		delete(h.analyticsCache, msg.deletedID)
 		delete(h.geminiAnalyticsCache, msg.deletedID)
+		delete(h.codexAnalyticsCache, msg.deletedID)
 		delete(h.analyticsCacheTime, msg.deletedID)
 		h.analyticsCacheMu.Unlock()
+		h.capabilitiesMu.Lock()
+		delete(h.capabilitiesCache, msg.deletedID)
+		delete(h.capabilitiesCacheTime, msg.deletedID)
+		delete(h.capabilitiesFetching, msg.deletedID)
+		h.capabilitiesMu.Unlock()
 		h.logActivityMu.Lock()
 		delete(h.lastLogActivity, msg.deletedID)
 		h.logActivityMu.Unlock()
@@ -5544,6 +5653,17 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// NOTE: Do NOT delete from mcpLoadingSessions here!
 			// Animation continues until Claude is ready or timeout expires
 			mcpUILog.Debug("mcp_reload_initiated", slog.String("session_id", msg.session.ID))
+		}
+		return h, nil
+
+	case remoteSessionRestartedMsg:
+		restartID := remoteRestartAnimationID(msg.remoteName, msg.sessionID)
+		delete(h.remoteRestarting, restartID)
+		delete(h.resumingSessions, restartID)
+		if msg.err != nil {
+			h.setError(fmt.Errorf("failed to restart remote session: %w", msg.err))
+		} else {
+			h.setError(fmt.Errorf("restarted '%s' on %s", msg.title, msg.remoteName))
 		}
 		return h, nil
 
@@ -5874,6 +5994,60 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		h.rebuildFlatItemsPreservingSelection(selectedBefore)
 		return h, nil
 
+	case terminalOutputMsg:
+		h.terminalOutputQueued.Delete(msg.sessionName)
+		if !h.insertMode {
+			return h, nil
+		}
+		inst, _, _ := h.selectedPreviewTarget()
+		if inst == nil || inst.GetTmuxSession() == nil || inst.GetTmuxSession().Name != msg.sessionName {
+			return h, nil
+		}
+		return h, h.requestActiveTerminalFrame()
+
+	case activeTerminalFrameFetchedMsg:
+		if msg.generation != h.caretBlinkGeneration {
+			return h, nil
+		}
+		dirty := h.activeTerminalFrameDirty
+		h.activeTerminalFrameFetching = false
+		h.activeTerminalFrameDirty = false
+		if inst, key, _ := h.selectedPreviewTarget(); h.isFocusedAgentTerminal(inst) && key == msg.previewKey {
+			if msg.err == nil {
+				h.activeTerminalFrame = msg.frame
+				h.activeTerminalFrameKey = msg.previewKey
+				h.activeTerminalFrameValid = true
+			} else {
+				uiLog.Debug("active_terminal_frame_failed",
+					"session_id", inst.ID,
+					"error", msg.err.Error())
+			}
+		}
+		if dirty {
+			return h, h.requestActiveTerminalFrame()
+		}
+		return h, nil
+
+	case caretBlinkMsg:
+		if !h.insertMode || msg.generation != h.caretBlinkGeneration {
+			return h, nil
+		}
+		h.caretVisible = !h.caretVisible
+		return h, h.scheduleCaretBlink()
+
+	case capabilitiesFetchedMsg:
+		h.capabilitiesMu.Lock()
+		if h.capabilitiesCache == nil {
+			h.capabilitiesCache = make(map[string]session.LocalAgentCapabilities)
+			h.capabilitiesCacheTime = make(map[string]time.Time)
+			h.capabilitiesFetching = make(map[string]bool)
+		}
+		h.capabilitiesCache[msg.sessionID] = msg.capabilities
+		h.capabilitiesCacheTime[msg.sessionID] = time.Now()
+		delete(h.capabilitiesFetching, msg.sessionID)
+		h.capabilitiesMu.Unlock()
+		return h, nil
+
 	case previewDebounceMsg:
 		// PERFORMANCE: Debounce period elapsed - check if this fetch is still relevant
 		// If user continued navigating, pendingPreviewKey will have changed
@@ -5915,6 +6089,9 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if inst != nil {
 			var cmds []tea.Cmd
+			if capabilitiesCmd := h.fetchLocalCapabilities(inst, false); capabilitiesCmd != nil {
+				cmds = append(cmds, capabilitiesCmd)
+			}
 
 			// Preview fetch
 			h.previewCacheMu.Lock()
@@ -5930,7 +6107,7 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Analytics fetch (for Claude/Gemini sessions with analytics enabled)
 			// Use TTL cache - only fetch if cache miss/expired and not already fetching
 			tickTool := inst.GetToolThreadSafe()
-			if (tickTool == "claude" || tickTool == "gemini") && h.analyticsFetchingID != inst.ID {
+			if (tickTool == "claude" || tickTool == "gemini" || session.IsCodexCompatible(tickTool)) && h.analyticsFetchingID != inst.ID {
 				switch tickTool {
 				case "claude":
 					cached := h.getAnalyticsForSession(inst)
@@ -5939,6 +6116,7 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if h.analyticsSessionID != inst.ID {
 							h.currentAnalytics = cached
 							h.currentGeminiAnalytics = nil
+							h.currentCodexAnalytics = nil
 							h.analyticsSessionID = inst.ID
 							h.analyticsPanel.SetAnalytics(cached)
 						}
@@ -5966,11 +6144,34 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if h.analyticsSessionID != inst.ID {
 							h.currentGeminiAnalytics = cached
 							h.currentAnalytics = nil
+							h.currentCodexAnalytics = nil
 							h.analyticsSessionID = inst.ID
 							h.analyticsPanel.SetGeminiAnalytics(cached)
 						}
 					} else {
 						// Cache miss or expired - fetch new analytics
+						config, _ := session.LoadUserConfig()
+						if config != nil && config.GetShowAnalytics() {
+							h.analyticsFetchingID = inst.ID
+							cmds = append(cmds, h.fetchAnalytics(inst))
+						}
+					}
+				case "codex":
+					var cached *session.CodexSessionAnalytics
+					h.analyticsCacheMu.RLock()
+					if c, ok := h.codexAnalyticsCache[inst.ID]; ok && time.Since(h.analyticsCacheTime[inst.ID]) < analyticsCacheTTL {
+						cached = c
+					}
+					h.analyticsCacheMu.RUnlock()
+					if cached != nil {
+						if h.analyticsSessionID != inst.ID {
+							h.currentCodexAnalytics = cached
+							h.currentAnalytics = nil
+							h.currentGeminiAnalytics = nil
+							h.analyticsSessionID = inst.ID
+							h.analyticsPanel.SetCodexAnalytics(cached)
+						}
+					} else {
 						config, _ := session.LoadUserConfig()
 						if config != nil && config.GetShowAnalytics() {
 							h.analyticsFetchingID = inst.ID
@@ -6018,14 +6219,14 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		h.previewCacheMu.Unlock()
 		return h, nil
 
-	case codexPreviewGeometryMsg:
+	case focusedTerminalGeometryMsg:
 		if msg.err != nil {
-			uiLog.Debug("codex_preview_geometry_failed",
+			uiLog.Debug("focused_terminal_geometry_failed",
 				"session_id", msg.sessionID,
 				"error", msg.err.Error())
 			return h, nil
 		}
-		// refresh-client -C causes tmux to send SIGWINCH to Codex. Capture the
+		// refresh-client -C causes tmux to send SIGWINCH to the agent. Capture the
 		// resulting frame immediately when this is still the focused session;
 		// stale completions from a session the user already left are ignored.
 		if h.insertMode && h.insertModeSessionID == msg.sessionID {
@@ -6033,7 +6234,10 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				h.previewCacheMu.Lock()
 				h.previewFetchingID = key
 				h.previewCacheMu.Unlock()
-				return h, h.fetchPreview(inst, key, windowIndex)
+				return h, tea.Batch(
+					h.fetchPreview(inst, key, windowIndex),
+					h.requestActiveTerminalFrame(),
+				)
 			}
 		}
 		return h, nil
@@ -6044,6 +6248,18 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil && msg.sessionID != "" {
 			// Update cache timestamp
 			h.analyticsCacheMu.Lock()
+			if h.analyticsCache == nil {
+				h.analyticsCache = make(map[string]*session.SessionAnalytics)
+			}
+			if h.geminiAnalyticsCache == nil {
+				h.geminiAnalyticsCache = make(map[string]*session.GeminiSessionAnalytics)
+			}
+			if h.codexAnalyticsCache == nil {
+				h.codexAnalyticsCache = make(map[string]*session.CodexSessionAnalytics)
+			}
+			if h.analyticsCacheTime == nil {
+				h.analyticsCacheTime = make(map[string]time.Time)
+			}
 			h.analyticsCacheTime[msg.sessionID] = time.Now()
 
 			if msg.analytics != nil {
@@ -6052,6 +6268,7 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Update current analytics for display
 				h.currentAnalytics = msg.analytics
 				h.currentGeminiAnalytics = nil
+				h.currentCodexAnalytics = nil
 				h.analyticsSessionID = msg.sessionID
 				// Update analytics panel with new data
 				h.analyticsPanel.SetAnalytics(msg.analytics)
@@ -6061,14 +6278,23 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Update current analytics for display
 				h.currentGeminiAnalytics = msg.geminiAnalytics
 				h.currentAnalytics = nil
+				h.currentCodexAnalytics = nil
 				h.analyticsSessionID = msg.sessionID
 				// Update analytics panel with new data
 				h.analyticsPanel.SetGeminiAnalytics(msg.geminiAnalytics)
+			} else if msg.codexAnalytics != nil {
+				h.codexAnalyticsCache[msg.sessionID] = msg.codexAnalytics
+				h.currentCodexAnalytics = msg.codexAnalytics
+				h.currentAnalytics = nil
+				h.currentGeminiAnalytics = nil
+				h.analyticsSessionID = msg.sessionID
+				h.analyticsPanel.SetCodexAnalytics(msg.codexAnalytics)
 			} else {
 				// Both nil - clear display if it's the current session
 				if h.analyticsSessionID == msg.sessionID {
 					h.currentAnalytics = nil
 					h.currentGeminiAnalytics = nil
+					h.currentCodexAnalytics = nil
 					h.analyticsPanel.SetAnalytics(nil)
 				}
 			}
@@ -6130,8 +6356,14 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 		h.analyticsCacheMu.Lock()
 		delete(h.analyticsCache, msg.sessionID)
 		delete(h.geminiAnalyticsCache, msg.sessionID)
+		delete(h.codexAnalyticsCache, msg.sessionID)
 		delete(h.analyticsCacheTime, msg.sessionID)
 		h.analyticsCacheMu.Unlock()
+		h.capabilitiesMu.Lock()
+		delete(h.capabilitiesCache, msg.sessionID)
+		delete(h.capabilitiesCacheTime, msg.sessionID)
+		delete(h.capabilitiesFetching, msg.sessionID)
+		h.capabilitiesMu.Unlock()
 		h.worktreeDirtyMu.Lock()
 		delete(h.worktreeDirtyCache, msg.sessionID)
 		delete(h.worktreeDirtyCacheTs, msg.sessionID)
@@ -6177,6 +6409,14 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 			h.setError(fmt.Errorf("Nothing visible to copy (%s)", msg.sessionTitle))
 		default:
 			h.setError(fmt.Errorf("Copied visible terminal text to clipboard (%d lines, %s)", msg.lineCount, msg.sessionTitle))
+		}
+		return h, nil
+
+	case outputSelectionCopyResultMsg:
+		if msg.err != nil {
+			h.setError(fmt.Errorf("Could not copy selected text: %w", msg.err))
+		} else {
+			h.setError(fmt.Errorf("Copied selected text to clipboard (%d lines)", msg.lineCount))
 		}
 		return h, nil
 
@@ -6374,7 +6614,13 @@ func (h *Home) updateInner(msg tea.Msg) (tea.Model, tea.Cmd) {
 				h.previewCacheMu.Unlock()
 			}
 		}
-		cmds := []tea.Cmd{h.tick(), previewCmd}
+		cmds := []tea.Cmd{h.tick(), previewCmd, h.requestActiveTerminalFrame()}
+		if selectedInst != nil {
+			cmds = append(cmds,
+				h.fetchLocalCapabilities(selectedInst, false),
+				h.refreshCodexAnalyticsIfStale(selectedInst),
+			)
+		}
 		if h.fullRepaint {
 			cmds = append(cmds, tea.ClearScreen)
 		}
@@ -7556,7 +7802,7 @@ func (h *Home) activateSelectedInPlace() (tea.Model, tea.Cmd) {
 				return h, nil
 			}
 			if h.enterInsertMode() {
-				return h, tea.Batch(tea.EnableMouseCellMotion, h.fetchSelectedPreview())
+				return h, h.consumeOutputActivationCmd()
 			}
 			return h, nil
 		}
@@ -7567,7 +7813,7 @@ func (h *Home) activateSelectedInPlace() (tea.Model, tea.Cmd) {
 
 	case session.ItemTypeWindow, session.ItemTypeRemoteSession:
 		if h.enterInsertMode() {
-			return h, tea.Batch(tea.EnableMouseCellMotion, h.fetchSelectedPreview())
+			return h, h.consumeOutputActivationCmd()
 		}
 
 	case session.ItemTypeGroup:
@@ -8296,7 +8542,7 @@ func (h *Home) handleMainKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return h, nil
 			}
 			if h.enterInsertMode() {
-				return h, tea.Batch(tea.EnableMouseCellMotion, h.fetchSelectedPreview())
+				return h, h.consumeOutputActivationCmd()
 			}
 		}
 		return h, nil
@@ -9380,13 +9626,14 @@ func (h *Home) handleMCPDialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			if targetInst != nil {
 				mcpUILog.Debug("dialog_restarting_session", slog.String("session_id", targetInst.ID))
+				h.invalidateLocalCapabilities(targetInst.ID)
 				// Track as MCP loading for animation in preview pane
 				h.mcpLoadingSessions[targetInst.ID] = time.Now()
 				// Set flag to skip MCP regeneration (Apply just wrote the config)
 				targetInst.SkipMCPRegenerate = true
 				// Restart the session to apply MCP changes
 				h.mcpDialog.Hide()
-				return h, h.restartSession(targetInst)
+				return h, tea.Batch(h.restartSession(targetInst), h.fetchLocalCapabilities(targetInst, true))
 			} else {
 				mcpUILog.Debug("dialog_session_not_found", slog.String("session_id", sessionID))
 			}
@@ -9694,9 +9941,14 @@ func (h *Home) handleSkillDialogKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			sessionID := h.skillDialog.GetSessionID()
 			targetInst := h.getInstanceByID(sessionID)
+			h.invalidateLocalCapabilities(sessionID)
 			if targetInst != nil && session.ShouldRestartProjectSkills(targetInst.Tool) {
 				h.skillDialog.Hide()
-				return h, h.restartSession(targetInst)
+				return h, tea.Batch(h.restartSession(targetInst), h.fetchLocalCapabilities(targetInst, true))
+			}
+			if targetInst != nil {
+				h.skillDialog.Hide()
+				return h, h.fetchLocalCapabilities(targetInst, true)
 			}
 		}
 		h.skillDialog.Hide()
@@ -13038,7 +13290,7 @@ func (h *Home) View() string {
 	if frame != "" {
 		h.lastRenderedFrame = frame
 	}
-	return frame
+	return h.renderOutputTextSelection(frame)
 }
 
 // renderFrame is the real frame builder behind View. Split out so View can
@@ -16652,17 +16904,26 @@ func (h *Home) renderPreviewPane(width, height int) string {
 		pvKey = previewCacheKey(selected.ID, item.WindowIndex)
 	}
 
-	// While the user is interacting with Codex, the Output pane is the Codex
-	// terminal—not an Agent Deck metadata card. Render the captured cell grid
-	// directly so the composer, status line, shortcuts, and other responsive
-	// Codex chrome occupy the same rows they do in a standalone terminal.
-	if h.isFocusedCodexTerminal(selected) {
-		h.previewCacheMu.RLock()
-		preview, hasCached := h.previewCache[pvKey]
-		h.previewCacheMu.RUnlock()
-		preview = h.previewContentForScroll(pvKey, preview)
-		rendered, offset := renderFocusedCodexTerminalAtOffset(
-			preview, hasCached, width, height, h.previewScrollOffset,
+	// While the user is interacting with an agent, Output is its terminal—not
+	// an Agent Deck metadata card. Render the captured cell grid directly for
+	// every provider so Claude, Cursor, Codex, and other full-screen agents keep
+	// their own composer, animation, status-line, and shortcut layout.
+	if h.isFocusedAgentTerminal(selected) {
+		var cursor *tmux.PaneCursor
+		preview := ""
+		hasCached := false
+		if h.previewScrollOffset == 0 && h.activeTerminalFrameValid && h.activeTerminalFrameKey == pvKey {
+			preview = h.activeTerminalFrame.Content
+			hasCached = true
+			cursor = &h.activeTerminalFrame.Cursor
+		} else {
+			h.previewCacheMu.RLock()
+			preview, hasCached = h.previewCache[pvKey]
+			h.previewCacheMu.RUnlock()
+			preview = h.previewContentForScroll(pvKey, preview)
+		}
+		rendered, offset := renderFocusedAgentTerminalAtOffset(
+			preview, hasCached, width, height, h.previewScrollOffset, cursor, h.caretVisible,
 		)
 		if h.previewScrollOffset > 0 {
 			if offset == 0 {
@@ -17020,6 +17281,7 @@ func (h *Home) renderPreviewPane(width, height int) string {
 			b.WriteString(mcpResult.String())
 			b.WriteString("\n")
 		}
+		h.renderLocalCapabilityLines(&b, selected, width, false)
 
 		// Fork hint when session can be forked
 		if selected.CanFork() {
@@ -17092,6 +17354,7 @@ func (h *Home) renderPreviewPane(width, height int) string {
 
 		mcpInfo := selected.GetMCPInfo()
 		renderSimpleMCPLine(&b, mcpInfo, width)
+		h.renderLocalCapabilityLines(&b, selected, width, false)
 	}
 
 	// OpenCode-specific info (session ID)
@@ -17165,6 +17428,8 @@ func (h *Home) renderPreviewPane(width, height int) string {
 		if selected.CodexSessionID != "" {
 			renderDetectedAtLine(&b, selected.CodexDetectedAt)
 		}
+		h.renderCodexContextLine(&b, selected, width)
+		h.renderLocalCapabilityLines(&b, selected, width, true)
 	}
 
 	// Custom tool info (tools defined in config.toml that aren't built-in)
@@ -17228,7 +17493,7 @@ func (h *Home) renderPreviewPane(width, height int) string {
 	// Check preview settings for what to show
 	config, _ := session.LoadUserConfig()
 	showAnalytics := config != nil && config.GetShowAnalytics() &&
-		(session.IsClaudeCompatible(selected.Tool) || selected.Tool == "gemini")
+		(session.IsClaudeCompatible(selected.Tool) || selected.Tool == "gemini" || session.IsCodexCompatible(selected.Tool))
 	showOutput := config == nil || config.GetShowOutput() // Default to true if config fails
 	showNotes := config != nil && config.GetShowNotes()   // Default to false if config fails
 	notesOutputSplit := 0.33
@@ -17242,7 +17507,7 @@ func (h *Home) renderPreviewPane(width, height int) string {
 		showAnalytics = false
 		showOutput = true
 	case PreviewModeAnalytics:
-		// showAnalytics keeps its default value (only available for Claude/Gemini)
+		// showAnalytics keeps its default value (available for Claude/Gemini/Codex)
 		showOutput = false
 		// PreviewModeBoth: use config settings (default)
 	}
@@ -17394,7 +17659,7 @@ func (h *Home) renderPreviewPane(width, height int) string {
 	_, isSessionForking := h.forkingSessions[selected.ID]
 	isStartingUp := isSessionLaunching || isSessionResuming || isSessionForking
 
-	// Analytics panel (for Claude/Gemini sessions with analytics enabled)
+	// Analytics panel (for Claude/Gemini/Codex sessions with analytics enabled)
 	// Skip showing "Loading analytics..." during startup - let the launch animation take focus
 	if showAnalytics && !isStartingUp {
 		analyticsHeader := renderSectionDivider("Analytics", width-4)
@@ -17402,7 +17667,8 @@ func (h *Home) renderPreviewPane(width, height int) string {
 		b.WriteString("\n")
 
 		// Check if we have analytics for this session
-		if h.analyticsSessionID == selected.ID && (h.currentAnalytics != nil || h.currentGeminiAnalytics != nil) {
+		if h.analyticsSessionID == selected.ID &&
+			(h.currentAnalytics != nil || h.currentGeminiAnalytics != nil || h.currentCodexAnalytics != nil) {
 			// Pass display settings from config
 			if config != nil {
 				h.analyticsPanel.SetDisplaySettings(config.Preview.GetAnalyticsSettings())

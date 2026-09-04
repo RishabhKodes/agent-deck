@@ -11,6 +11,7 @@ import (
 
 	"github.com/RishabhKodes/agent-deck/internal/clipboard"
 	"github.com/RishabhKodes/agent-deck/internal/session"
+	"github.com/RishabhKodes/agent-deck/internal/tmux"
 )
 
 // defaultInsertBatchDuration is the production debounce window for coalescing
@@ -97,9 +98,23 @@ func (h *Home) enterInsertMode() bool {
 	h.insertBuf.Reset()
 	h.insertFlushPending = false
 	h.resetPreviewScroll()
+	h.clearOutputTextSelection()
 
 	h.insertMode = true
 	h.insertModeSessionID = target.local.ID
+	if tmuxSession := target.local.GetTmuxSession(); tmuxSession != nil {
+		h.activeTerminalTmux.Store(tmuxSession.Name)
+	} else {
+		h.activeTerminalTmux.Store("")
+	}
+	h.outputActivationPending = true
+	h.caretBlinkGeneration++
+	h.caretVisible = true
+	h.activeTerminalFrame = tmux.PaneFrame{}
+	h.activeTerminalFrameKey = ""
+	h.activeTerminalFrameValid = false
+	h.activeTerminalFrameFetching = false
+	h.activeTerminalFrameDirty = false
 	return true
 }
 
@@ -154,6 +169,16 @@ func (h *Home) openInsertKeySender(target insertTargetRef) (insertKeySender, err
 func (h *Home) exitInsertMode() {
 	h.insertMode = false
 	h.insertModeSessionID = ""
+	h.clearOutputTextSelection()
+	h.activeTerminalTmux.Store("")
+	h.outputActivationPending = false
+	h.caretBlinkGeneration++
+	h.caretVisible = false
+	h.activeTerminalFrame = tmux.PaneFrame{}
+	h.activeTerminalFrameKey = ""
+	h.activeTerminalFrameValid = false
+	h.activeTerminalFrameFetching = false
+	h.activeTerminalFrameDirty = false
 	h.insertBuf.Reset()
 	h.insertFlushPending = false
 	h.resetPreviewScroll()
@@ -435,6 +460,9 @@ func (h *Home) renderInsertModeBar() string {
 	border := borderStyle.Render(repeatRune('─', max(0, h.width)))
 
 	targetTitle := h.insertTargetDisplayName()
+	if targetTitle != "" {
+		targetTitle = cellTruncate(targetTitle, min(24, max(8, h.width/5)), "...")
+	}
 
 	badge := lipgloss.NewStyle().
 		Foreground(ColorBg).
@@ -450,11 +478,17 @@ func (h *Home) renderInsertModeBar() string {
 	if targetTitle != "" {
 		line += " " + infoStyle.Render("→ "+targetTitle)
 	}
-	hint := "Type · Wheel/PgUp/PgDn scroll · Shift-drag selects · Esc navigates"
+	if inst := h.getInstanceByID(h.insertModeSessionID); inst != nil {
+		if loadout := h.outputLoadoutSummary(inst); loadout != "" {
+			line += "  " + lipgloss.NewStyle().Foreground(ColorCyan).Render(loadout)
+		}
+	}
+	hint := "Type · Wheel/PgUp/PgDn scroll · Hold Shift+drag to select/copy · Esc navigates"
 	if h.previewScrollOffset > 0 {
-		hint = "History paused · End returns live · Shift-drag selects · Esc navigates"
+		hint = "History paused · End returns live · Shift+drag selects/copies · Esc navigates"
 	}
 	line += "  " + hintStyle.Render(hint)
+	line = cellTruncate(line, max(1, h.width), "")
 
 	return lipgloss.JoinVertical(lipgloss.Left, border, line)
 }

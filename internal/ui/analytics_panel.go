@@ -14,6 +14,7 @@ import (
 type AnalyticsPanel struct {
 	analytics       *session.SessionAnalytics
 	geminiAnalytics *session.GeminiSessionAnalytics
+	codexAnalytics  *session.CodexSessionAnalytics
 	width           int
 	height          int
 	displaySettings session.AnalyticsDisplaySettings
@@ -33,12 +34,21 @@ func (p *AnalyticsPanel) SetDisplaySettings(settings session.AnalyticsDisplaySet
 func (p *AnalyticsPanel) SetAnalytics(a *session.SessionAnalytics) {
 	p.analytics = a
 	p.geminiAnalytics = nil // Clear Gemini analytics when setting Claude
+	p.codexAnalytics = nil
 }
 
 // SetGeminiAnalytics sets the Gemini analytics data to display
 func (p *AnalyticsPanel) SetGeminiAnalytics(a *session.GeminiSessionAnalytics) {
 	p.geminiAnalytics = a
 	p.analytics = nil // Clear Claude analytics when setting Gemini
+	p.codexAnalytics = nil
+}
+
+// SetCodexAnalytics sets Codex rollout token data to display.
+func (p *AnalyticsPanel) SetCodexAnalytics(a *session.CodexSessionAnalytics) {
+	p.codexAnalytics = a
+	p.analytics = nil
+	p.geminiAnalytics = nil
 }
 
 // SetSize sets the panel dimensions
@@ -49,13 +59,16 @@ func (p *AnalyticsPanel) SetSize(width, height int) {
 
 // View renders the analytics panel
 func (p *AnalyticsPanel) View() string {
-	if p.analytics == nil && p.geminiAnalytics == nil {
+	if p.analytics == nil && p.geminiAnalytics == nil && p.codexAnalytics == nil {
 		return p.renderEmpty()
 	}
 
 	// Render Gemini analytics if available
 	if p.geminiAnalytics != nil {
 		return p.renderGeminiView()
+	}
+	if p.codexAnalytics != nil {
+		return p.renderCodexView()
 	}
 
 	var b strings.Builder
@@ -108,6 +121,72 @@ func (p *AnalyticsPanel) View() string {
 	}
 
 	return b.String()
+}
+
+func (p *AnalyticsPanel) renderCodexView() string {
+	var b strings.Builder
+	sectionsRendered := 0
+	b.WriteString(p.renderHeader())
+	b.WriteString("\n")
+
+	if p.displaySettings.GetShowContextBar() {
+		b.WriteString(p.renderCodexContextBar())
+		b.WriteString("\n\n")
+		sectionsRendered++
+	}
+	if p.displaySettings.GetShowTokens() {
+		b.WriteString(p.renderCodexTokens())
+		b.WriteString("\n")
+		sectionsRendered++
+	}
+	if sectionsRendered == 0 {
+		dimStyle := lipgloss.NewStyle().Foreground(ColorTextDim).Italic(true)
+		b.WriteString(dimStyle.Render("Codex analytics available"))
+	}
+	return b.String()
+}
+
+func (p *AnalyticsPanel) renderCodexContextBar() string {
+	percent := p.codexAnalytics.ContextPercent()
+	return renderContextUsageBar(percent, p.width)
+}
+
+func (p *AnalyticsPanel) renderCodexTokens() string {
+	labelStyle := lipgloss.NewStyle().Foreground(ColorText).Bold(true)
+	valueStyle := lipgloss.NewStyle().Foreground(ColorAccent)
+	dimStyle := lipgloss.NewStyle().Foreground(ColorTextDim)
+	return fmt.Sprintf("%s\n  %s %s  %s %s\n  %s %s",
+		labelStyle.Render("Tokens"),
+		dimStyle.Render("Current:"), valueStyle.Render(formatNumber(p.codexAnalytics.CurrentContextTokens)),
+		dimStyle.Render("Window:"), valueStyle.Render(formatNumber(p.codexAnalytics.ContextWindow)),
+		dimStyle.Render("Lifetime:"), valueStyle.Render(formatNumber(p.codexAnalytics.TotalTokens)),
+	)
+}
+
+func renderContextUsageBar(percent float64, width int) string {
+	labelStyle := lipgloss.NewStyle().Foreground(ColorText).Bold(true)
+	dimStyle := lipgloss.NewStyle().Foreground(ColorTextDim)
+	if percent < 0 {
+		percent = 0
+	}
+	if percent > 100 {
+		percent = 100
+	}
+	barColor := ColorGreen
+	if percent >= 80 {
+		barColor = ColorRed
+	} else if percent >= 60 {
+		barColor = ColorYellow
+	}
+	maxBarWidth := 30
+	if width > 0 && width < 50 {
+		maxBarWidth = max(10, width-20)
+	}
+	filledWidth := min(maxBarWidth, int(percent/100*float64(maxBarWidth)))
+	bar := lipgloss.NewStyle().Foreground(barColor).Render(strings.Repeat("█", filledWidth)) +
+		dimStyle.Render(strings.Repeat("░", maxBarWidth-filledWidth))
+	percentText := lipgloss.NewStyle().Foreground(barColor).Bold(true).Render(fmt.Sprintf("%.1f%%", percent))
+	return fmt.Sprintf("%s [%s] %s", labelStyle.Render("Context"), bar, percentText)
 }
 
 // renderGeminiView renders Gemini-specific analytics
@@ -316,7 +395,7 @@ func (p *AnalyticsPanel) renderEmpty() string {
 	b.WriteString("\n\n")
 	b.WriteString(dimStyle.Render("No analytics available"))
 	b.WriteString("\n")
-	b.WriteString(dimStyle.Render("(Claude/Gemini sessions only)"))
+	b.WriteString(dimStyle.Render("(Claude/Gemini/Codex sessions only)"))
 
 	return b.String()
 }
@@ -538,7 +617,7 @@ func (p *AnalyticsPanel) renderCost() string {
 }
 
 // formatNumber formats an integer with comma separators
-func formatNumber(n int) string {
+func formatNumber[T ~int | ~int64](n T) string {
 	if n < 1000 {
 		return fmt.Sprintf("%d", n)
 	}

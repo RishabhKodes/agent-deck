@@ -90,7 +90,7 @@ func (h *Home) scrollPreviewToOldest() {
 }
 
 func (h *Home) previewPageStep() int {
-	_, rows, ok := h.focusedCodexTerminalDimensions()
+	_, rows, ok := h.focusedAgentTerminalDimensions()
 	if !ok {
 		rows = h.height / 2
 	}

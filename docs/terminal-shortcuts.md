@@ -4,6 +4,23 @@ This page documents keyboard shortcuts that interact with agent-deck's
 tmux-backed session model — and the small set of platform / terminal
 quirks that can surprise users.
 
+## Interact with an agent in the dashboard
+
+Press `Enter` or `I` on a session to turn the dashboard's Output pane into the
+agent's input surface. The pane uses the agent's current tmux grid, geometry,
+colors, animation frames, and cursor rather than a reformatted transcript.
+
+| Input | What happens |
+| ----- | ------------ |
+| Hold `Shift` + drag | Select terminal text and copy it on release. |
+| `PgUp` / `PgDn` | Move through captured output history. |
+| `Home` / `End` | Jump to the oldest captured row / return to live output. |
+| `Esc` | Return to dashboard navigation and mouse controls. |
+
+The Output footer shows the active provider's locally configured MCP tools and
+skills. Claude reads its Claude skill roots; Cursor reads its own Cursor and
+Agent Skills roots. Codex also shows its current context-window usage.
+
 ## Detach from an attached session
 
 | Keystroke | What happens |

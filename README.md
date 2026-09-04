@@ -16,6 +16,10 @@ make install
 Run `agent-deck` to open the dashboard. The fork has no web server, updater,
 remote SSH controller, fleet/conductor service, or telemetry dependency.
 
+Inside the dashboard's active Output pane, the mouse wheel scrolls captured
+agent history. Hold `Shift` while dragging to select text; Agent Deck highlights
+the range and copies it to the clipboard on release.
+
 ## Supported agents
 
 Built-in tool profiles cover Claude, Codex, Gemini, OpenCode, Pi, Copilot,
@@ -51,6 +55,10 @@ reference. Select a profile with `-p/--profile` and a group with
 
 `j`/`k` or arrows move through sessions. `Enter` opens the selected session's
 Output pane; type and press `Enter` to submit, or `Esc` to return to the list.
+The Output pane mirrors the agent's own terminal UI and cursor. Hold `Shift`
+while dragging to select/copy text; use `PgUp`/`PgDn`, `Home`, and `End` for captured history.
+Codex shows live context usage, and the Output footer lists the selected
+provider's local tools and skills (Claude and Cursor remain separate).
 While typing in a session, `Ctrl+V` imports an image from the system clipboard
 to a temporary PNG and inserts its path into the prompt (macOS requires
 `pngpaste`; Linux supports `wl-paste` or `xclip`).
