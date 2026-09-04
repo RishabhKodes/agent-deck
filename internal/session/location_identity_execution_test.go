@@ -150,12 +150,21 @@ func TestRelativeRemotePath_IdentityAndExecutionAgree(t *testing.T) {
 // perfectly reasonable as text and is wrong.
 func TestRemoteCDPrefix_IdentityAndExecutionAgree(t *testing.T) {
 	home := t.TempDir()
+	var err error
+	home, err = filepath.EvalSymlinks(home)
+	if err != nil {
+		t.Fatalf("resolve remote home: %v", err)
+	}
 	for _, sub := range []string{"work", "my dir", "quote'dir"} {
 		if err := os.MkdirAll(filepath.Join(home, sub), 0o755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}
 	}
 	elsewhere := t.TempDir()
+	elsewhere, err = filepath.EvalSymlinks(elsewhere)
+	if err != nil {
+		t.Fatalf("resolve absolute remote path: %v", err)
+	}
 
 	cases := []struct {
 		remotePath string

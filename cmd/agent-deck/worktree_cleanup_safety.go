@@ -260,18 +260,22 @@ func processWithCWDInsideLsof(root string) (int, error) {
 	// #nosec G204 G702 -- "lsof" is a fixed binary invoked with an argv (no
 	// shell); root is a worktree path from the repo's own worktree list.
 	out, err := exec.Command("lsof", "-a", "-d", "cwd", "+D", root, "-F", "p").Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 && len(out) == 0 {
-			return 0, nil
-		}
-		return 0, err
-	}
+	// lsof may return status 1 with partial stdout when its recursive +D walk
+	// races a disappearing entry. A positive PID is still authoritative and is
+	// the safe result for this deletion guard; only an unparseable partial read
+	// remains an error. Empty status-1 output means there were no matches.
 	for _, line := range strings.Split(string(out), "\n") {
 		if strings.HasPrefix(line, "p") {
 			if pid, convErr := strconv.Atoi(strings.TrimPrefix(line, "p")); convErr == nil {
 				return pid, nil
 			}
 		}
+	}
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 && len(out) == 0 {
+			return 0, nil
+		}
+		return 0, err
 	}
 	return 0, nil
 }

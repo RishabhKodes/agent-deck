@@ -66,8 +66,11 @@ func TestRunSendKeysBounded_FastCommandSucceeds(t *testing.T) {
 	if err := runSendKeysBounded(exec.Command("true")); err != nil {
 		t.Fatalf("fast command must succeed, got %v", err)
 	}
-	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
-		t.Fatalf("fast command took %v — should return promptly, not wait out the timer", elapsed)
+	// Leave scheduler headroom for a default-parallel `go test ./...` run while
+	// still distinguishing immediate completion from waiting for the 500ms
+	// timeout path.
+	if elapsed := time.Since(start); elapsed > tmuxSendKeysTimeout-50*time.Millisecond {
+		t.Fatalf("fast command took %v — should return promptly, not wait out the %v timer", elapsed, tmuxSendKeysTimeout)
 	}
 }
 

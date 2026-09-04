@@ -57,6 +57,7 @@ func TestTestMainDoesNotLeakBootstrapServer(t *testing.T) {
 		pkg := pkg
 		t.Run(pkg, func(t *testing.T) {
 			before := snapshotADTmuxDirs()
+			ownerToken := pkg + "-" + time.Now().UTC().Format(time.RFC3339Nano)
 
 			// Bound the child run so a hung child (e.g. a stalled tmux call)
 			// fails this guard with a clear message instead of pinning the
@@ -68,7 +69,8 @@ func TestTestMainDoesNotLeakBootstrapServer(t *testing.T) {
 			cmd := exec.CommandContext(ctx, "go", "test", "-count=1", "-timeout", "60s",
 				"-run", "TestTmuxBootstrap_ServerIsRunning", pkg)
 			cmd.Dir = repoRoot
-			cmd.Env = os.Environ()
+			cmd.Env = append(envWithoutKey(os.Environ(), testutil.TestTmuxOwnerTokenEnv),
+				testutil.TestTmuxOwnerTokenEnv+"="+ownerToken)
 			out, err := cmd.CombinedOutput()
 			if ctx.Err() == context.DeadlineExceeded {
 				t.Fatalf("child `go test %s` did not finish within 2m (hung?); output:\n%s", pkg, out)
@@ -93,6 +95,10 @@ func TestTestMainDoesNotLeakBootstrapServer(t *testing.T) {
 
 			var leaked []string
 			for _, dir := range newDirs {
+				marker, err := os.ReadFile(filepath.Join(dir, ".agent-deck-test-owner"))
+				if err != nil || string(marker) != ownerToken {
+					continue
+				}
 				for _, sock := range socketsUnder(dir) {
 					list := exec.Command("tmux", "-S", sock,
 						"list-sessions", "-F", "#{session_name}")
@@ -120,6 +126,17 @@ func TestTestMainDoesNotLeakBootstrapServer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func envWithoutKey(env []string, key string) []string {
+	prefix := key + "="
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		if !strings.HasPrefix(entry, prefix) {
+			out = append(out, entry)
+		}
+	}
+	return out
 }
 
 // envWithoutTmux returns os.Environ() with TMUX and TMUX_PANE removed, mirroring

@@ -37,3 +37,18 @@ func TestNewHomeDoesNotStartBackgroundWorkersInTests(t *testing.T) {
 		t.Fatal("hook watcher started in test mode")
 	}
 }
+
+func TestDisableHomeBackgroundWorkersForTestsRestoresPreviousState(t *testing.T) {
+	previous := homeBackgroundWorkersEnabled
+	t.Cleanup(func() { homeBackgroundWorkersEnabled = previous })
+	homeBackgroundWorkersEnabled = true
+
+	restore := DisableHomeBackgroundWorkersForTests()
+	if homeBackgroundWorkersEnabled {
+		t.Fatal("background workers remained enabled")
+	}
+	restore()
+	if !homeBackgroundWorkersEnabled {
+		t.Fatal("restore did not reinstate the previous setting")
+	}
+}

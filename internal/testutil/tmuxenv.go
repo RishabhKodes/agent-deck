@@ -14,6 +14,14 @@ import (
 // tmux server.
 const TestIsolationMarkerEnv = "AGENT_DECK_TEST_ISOLATED"
 
+// TestTmuxOwnerTokenEnv lets a parent regression test identify exactly which
+// isolated tmux directory a nested test binary created. It prevents global
+// /tmp snapshots from mistaking a concurrently running package's server for a
+// leak and killing that package's live bootstrap server.
+const TestTmuxOwnerTokenEnv = "AGENT_DECK_TEST_TMUX_OWNER_TOKEN"
+
+const testTmuxOwnerMarker = ".agent-deck-test-owner"
+
 // IsolateTmuxSocket makes it safe to spawn real tmux servers from tests
 // even when `go test` is invoked from inside a live tmux session (the
 // default on every developer host that uses agent-deck).
@@ -75,6 +83,11 @@ func IsolateTmuxSocket() func() {
 		_ = os.MkdirAll(dir, 0o700)
 	}
 	assertIsolatedTmuxTmpdir(dir)
+	if token := os.Getenv(TestTmuxOwnerTokenEnv); token != "" {
+		if err := os.WriteFile(filepath.Join(dir, testTmuxOwnerMarker), []byte(token), 0o600); err != nil {
+			panic(fmt.Sprintf("testutil.IsolateTmuxSocket: write owner marker: %v", err))
+		}
+	}
 	_ = os.Setenv("TMUX_TMPDIR", dir)
 	_ = os.Setenv(TestIsolationMarkerEnv, "1")
 

@@ -40,6 +40,11 @@ func remoteBoundaryFixture(t *testing.T) (local, remote *Instance, sessionID, pr
 	t.Cleanup(ClearUserConfigCache)
 
 	projectPath = t.TempDir()
+	var err error
+	projectPath, err = filepath.EvalSymlinks(projectPath)
+	if err != nil {
+		t.Fatalf("resolve project path: %v", err)
+	}
 	sessionID = "11111111-2222-3333-4444-555555555555"
 
 	projDir := filepath.Join(configDir, "projects", ConvertToClaudeDirName(projectPath))

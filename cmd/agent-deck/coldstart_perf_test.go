@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -38,14 +39,26 @@ import (
 const (
 	coldStartHelpBase    = 8 * time.Millisecond // → ColdBudget = 40ms locally, 80ms in CI
 	coldStartVersionBase = 8 * time.Millisecond // → ColdBudget = 40ms locally, 80ms in CI
+	darwinColdStartBase  = 28 * time.Millisecond
 )
+
+func coldStartBase(base time.Duration) time.Duration {
+	// A dynamically linked Go process on macOS has a measured ~48ms launch
+	// floor on otherwise idle Apple Silicon hosts, and whole-repo parallel test
+	// contention raises the trimmed mean as high as ~122ms. Preserve the tighter
+	// Linux guard while giving Darwin a documented 140ms local upper bound.
+	if runtime.GOOS == "darwin" {
+		return darwinColdStartBase
+	}
+	return base
+}
 
 // TestPerf_ColdStart_Help measures `agent-deck --help` end-to-end walltime.
 // Catches regressions in package init (initColorProfile, initUpdateSettings)
 // and the pre-dispatch tmux probes (SetDefaultSocketName, WarnIfVulnerableTmux).
 func TestPerf_ColdStart_Help(t *testing.T) {
 	testutil.SkipIfShort(t)
-	budget := testutil.ColdBudget(t, coldStartHelpBase)
+	budget := testutil.ColdBudget(t, coldStartBase(coldStartHelpBase))
 	sb := harness.NewSandbox(t)
 	env := perfEnv(sb)
 
@@ -64,7 +77,7 @@ func TestPerf_ColdStart_Help(t *testing.T) {
 // same init path.
 func TestPerf_ColdStart_Version(t *testing.T) {
 	testutil.SkipIfShort(t)
-	budget := testutil.ColdBudget(t, coldStartVersionBase)
+	budget := testutil.ColdBudget(t, coldStartBase(coldStartVersionBase))
 	sb := harness.NewSandbox(t)
 	env := perfEnv(sb)
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/RishabhKodes/agent-deck/internal/testutil"
+	"github.com/RishabhKodes/agent-deck/internal/ui"
 )
 
 // TestMain ensures all cmd tests use the _test profile to prevent
@@ -54,6 +55,13 @@ func runTestMain(m *testing.M) int {
 	// See internal/testutil/tmuxenv.go for the full postmortem.
 	cleanupTmux := testutil.IsolateTmuxSocket()
 	defer cleanupTmux()
+	restoreHomeWorkers := ui.DisableHomeBackgroundWorkersForTests()
+	defer restoreHomeWorkers()
+
+	// Shell sessions created by CLI fixtures must not flush an interactive
+	// zsh history file into a t.TempDir after tmux teardown has begun.
+	os.Setenv("SHELL", "/bin/sh")
+	os.Setenv("HISTFILE", "/dev/null")
 
 	// Force _test profile for all tests in this package
 	os.Setenv("AGENTDECK_PROFILE", "_test")

@@ -122,12 +122,6 @@ func initColorProfile() {
 }
 
 func main() {
-	// Make bare `tmux` invocations resolve even when launched from a minimal
-	// environment (notably a `terminal-notifier -execute` notification click,
-	// whose launchd PATH omits Homebrew's /opt/homebrew/bin). Must run before any
-	// tmux probe below. No-op when tmux is already on PATH.
-	ensureTmuxOnPath()
-
 	// Extract global -p/--profile flag before subcommand dispatch
 	profile, args := extractProfileFlag(os.Args[1:])
 	if profile != "" {
@@ -142,6 +136,27 @@ func main() {
 	// a prompt and would otherwise fail closed under the "prompt" default.
 	allowRepoScripts, args2 := extractAllowRepoScriptsFlag(args)
 	args = args2
+
+	// Help and version are pure output paths. Keep them ahead of config reads,
+	// PATH repair, and tmux probes so they remain fast and work on hosts where
+	// tmux is not installed.
+	if len(args) > 0 {
+		switch args[0] {
+		case "version", "--version", "-v":
+			writeVersionOutput(os.Stdout, Version)
+			return
+		case "help", "--help", "-h":
+			printHelp()
+			return
+		}
+	}
+
+	// Make bare `tmux` invocations resolve even when launched from a minimal
+	// environment (notably a `terminal-notifier -execute` notification click,
+	// whose launchd PATH omits Homebrew's /opt/homebrew/bin). No-op when tmux is
+	// already on PATH.
+	ensureTmuxOnPath()
+
 	if envVal := strings.TrimSpace(os.Getenv("AGENT_DECK_ALLOW_REPO_SCRIPTS")); envVal != "" {
 		allowRepoScripts = allowRepoScripts || envVal == "1" || strings.EqualFold(envVal, "true")
 	}
@@ -164,11 +179,6 @@ func main() {
 	// calls use Instance.TmuxSocketName directly — this default is only
 	// the installation-wide fallback for callers without a session handle.
 	tmux.SetDefaultSocketName(session.GetTmuxSettings().GetSocketName())
-
-	// Nudge macOS users whose tmux predates the upstream fix for the
-	// control-mode NULL-deref (tmux #4980, issue #737). Once per process,
-	// no-op on non-macOS, suppressible via AGENTDECK_SUPPRESS_TMUX_WARNING.
-	tmux.WarnIfVulnerableTmux()
 
 	// Handle subcommands
 	if len(args) > 0 {
@@ -361,6 +371,11 @@ func main() {
 	ui.InitTheme(theme)
 
 	ensureTmuxInPathOrExit()
+
+	// The long-lived control-mode clients affected by tmux #4980 are opened by
+	// the TUI, not storage-only CLI commands. Warn only on this path so JSON CLI
+	// output remains machine-clean.
+	tmux.WarnIfVulnerableTmux()
 
 	// Create storage early to register instance via SQLite
 	earlyStorage, err := session.NewStorageWithProfile(profile)
@@ -703,6 +718,7 @@ func main() {
 		tea.WithMouseCellMotion(),
 		tea.WithInput(ui.NewCSIuReader(os.Stdin)),
 	)
+	homeModel.SetMessageSender(p.Send)
 
 	// Start maintenance worker (background goroutine, respects config toggle)
 	maintenanceCtx, maintenanceCancel := context.WithCancel(context.Background())

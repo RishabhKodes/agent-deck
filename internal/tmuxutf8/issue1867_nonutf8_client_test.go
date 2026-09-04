@@ -61,7 +61,9 @@ func startSpinnerSession(t *testing.T) (socket, session string) {
 		t.Skip("tmux binary not available")
 	}
 
-	socket = fmt.Sprintf("ad1867-%d-%s", os.Getpid(), strings.ToLower(strings.NewReplacer("/", "-", " ", "-").Replace(t.Name())))
+	// TMUX_TMPDIR is already unique per package test process. Keep the socket
+	// basename short enough for macOS's 104-byte AF_UNIX path limit.
+	socket = fmt.Sprintf("ad1867-%d", os.Getpid())
 	session = "agentdeck_i1867"
 
 	run := func(args ...string) {
