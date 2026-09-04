@@ -39,14 +39,14 @@ import (
 const (
 	coldStartHelpBase    = 8 * time.Millisecond // → ColdBudget = 40ms locally, 80ms in CI
 	coldStartVersionBase = 8 * time.Millisecond // → ColdBudget = 40ms locally, 80ms in CI
-	darwinColdStartBase  = 28 * time.Millisecond
+	darwinColdStartBase  = 32 * time.Millisecond
 )
 
 func coldStartBase(base time.Duration) time.Duration {
 	// A dynamically linked Go process on macOS has a measured ~48ms launch
 	// floor on otherwise idle Apple Silicon hosts, and whole-repo parallel test
-	// contention raises the trimmed mean as high as ~122ms. Preserve the tighter
-	// Linux guard while giving Darwin a documented 140ms local upper bound.
+	// contention raises the trimmed mean as high as ~147ms. Preserve the tighter
+	// Linux guard while giving Darwin a documented 160ms local upper bound.
 	if runtime.GOOS == "darwin" {
 		return darwinColdStartBase
 	}
